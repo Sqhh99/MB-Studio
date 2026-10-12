@@ -151,14 +151,21 @@ jobs:
         run: |
           $setup = Get-ChildItem dist\MB-Studio-*-setup.exe | Select-Object -First 1
           $target = "$env:RUNNER_TEMP\MB-Studio test install"
+          # Start-Process does not quote arguments: quote the directory (it has spaces)
           $p = Start-Process $setup.FullName -Wait -PassThru -ArgumentList `
-                 '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$target"
+                 '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`"", `
+                 "/LOG=`"$env:RUNNER_TEMP\setup.log`""
           if ($p.ExitCode -ne 0) { throw "setup failed with exit code $($p.ExitCode)" }
+          if (-not (Test-Path "$target\bin\mbstudio.exe")) {
+            Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 40
+            throw "mbstudio.exe was not installed into $target\bin"
+          }
           # A clean environment: only what the installer provides.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $bin = "$target\bin"
           $data = "${{ github.workspace }}\test\utilities\testdata\mb21\TN136HS.309.snipped.mb21"
-          & "$bin\mbstudio.exe" --version
+          # (PowerShell waits for a GUI-subsystem program only when its output is piped)
+          & "$bin\mbstudio.exe" --version | Write-Host
           $plugins = & "$bin\mbstudio.exe" --list-plugins | Out-String
           Write-Host $plugins
           if ($plugins -notmatch 'mbsystem\s+active') { throw "mbsystem plugin not active" }

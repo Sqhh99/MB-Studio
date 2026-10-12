@@ -65,7 +65,7 @@ if(MB_DEPLOY_QT_PLUGINS AND EXISTS "${MB_DEPLOY_QT_PLUGINS}")
   message(STATUS "  Qt plugins: ${MB_DEPLOY_QT_PLUGINS}")
 endif()
 if(MB_DEPLOY_QT_QML AND EXISTS "${MB_DEPLOY_QT_QML}")
-  foreach(_module QtQml QtQuick Qt/labs/folderlistmodel Qt/labs/settings)
+  foreach(_module QML QtCore QtQml QtQuick Qt/labs/folderlistmodel Qt/labs/settings)
     if(EXISTS "${MB_DEPLOY_QT_QML}/${_module}")
       file(COPY "${MB_DEPLOY_QT_QML}/${_module}/" DESTINATION "${_bin}/qml/${_module}"
            PATTERN "*.qmltypes" EXCLUDE PATTERN "*d.dll" EXCLUDE)
