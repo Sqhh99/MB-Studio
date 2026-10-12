@@ -54,7 +54,8 @@ ApplicationWindow {
         onAccepted: App.openUrl(selectedFile)
     }
 
-    Shortcut { sequence: StandardKey.Open; onActivated: window.openData() }
+    // sequences: the platform may map StandardKey.Open to several key bindings
+    Shortcut { sequences: [StandardKey.Open]; onActivated: window.openData() }
     Shortcut { sequence: "Ctrl+L"; onActivated: consolePanel.expanded = !consolePanel.expanded }
     Repeater {
         model: window.pages.length
