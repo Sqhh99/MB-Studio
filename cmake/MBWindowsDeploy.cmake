@@ -52,8 +52,11 @@ if(MB_DEPLOY_GMT_EXE AND EXISTS "${MB_DEPLOY_GMT_EXE}")
   message(STATUS "  gmt driver: ${MB_DEPLOY_GMT_EXE}")
 endif()
 
-# Qt: platform/image plugins next to the executables, QML modules in bin/qml
-# (both are on Qt's default search path relative to the application).
+# Qt: platform/image plugins next to the executables, QML modules in bin/qml.
+# A relocatable Qt resolves its paths relative to the Qt6Core.dll it was
+# built with (<prefix>/bin -> <prefix>/Qt6/qml), which does not match this
+# layout, so a qt.conf next to the programs states it explicitly.
+file(WRITE "${_bin}/qt.conf" "[Paths]\nPrefix = .\nPlugins = .\nQmlImports = qml\n")
 if(MB_DEPLOY_QT_PLUGINS AND EXISTS "${MB_DEPLOY_QT_PLUGINS}")
   foreach(_kind platforms imageformats styles iconengines tls)
     if(EXISTS "${MB_DEPLOY_QT_PLUGINS}/${_kind}")

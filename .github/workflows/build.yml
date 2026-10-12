@@ -183,9 +183,14 @@ jobs:
           if ($usage -notmatch 'mbswath \[mbsystem\]') { throw "MB-System GMT supplement not found: $usage" }
           # The GUI starts and shows its window (offscreen), then quits.
           $env:QT_QPA_PLATFORM = "offscreen"
-          $gui = Start-Process "$bin\mbstudio.exe" -PassThru
+          $env:QT_FORCE_STDERR_LOGGING = "1"
+          $guiLog = "$env:RUNNER_TEMP\gui-stderr.log"
+          $gui = Start-Process "$bin\mbstudio.exe" -PassThru -RedirectStandardError $guiLog
           Start-Sleep -Seconds 10
-          if ($gui.HasExited) { throw "the user interface exited early with code $($gui.ExitCode)" }
+          if ($gui.HasExited) {
+            Get-Content $guiLog -ErrorAction SilentlyContinue | Write-Host
+            throw "the user interface exited early with code $($gui.ExitCode)"
+          }
           Stop-Process -Id $gui.Id
           Write-Host "Installed application OK"
 

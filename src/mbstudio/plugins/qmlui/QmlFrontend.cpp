@@ -55,10 +55,21 @@ int QmlFrontend::run(Kernel &kernel, int argc, char **argv) {
   int status = 0;
   {
     QQmlApplicationEngine engine;
+    // Installed layout: QML modules in <bin>/qml (see MBWindowsDeploy.cmake).
+    const QString deployedQml = QCoreApplication::applicationDirPath() + QStringLiteral("/qml");
+    if (QFileInfo(deployedQml).isDir())
+      engine.addImportPath(deployedQml);
+    // QML errors also go to the kernel log (shown on the Log page).
+    QObject::connect(&engine, &QQmlEngine::warnings, &engine, [&kernel](const QList<QQmlError> &warnings) {
+      for (const QQmlError &w : warnings)
+        kernel.log(LogLevel::Warning, "qmlui", w.toString().toStdString());
+    });
     engine.addImageProvider(QStringLiteral("mbgrid"), new GridImageProvider(controller.gridModel()));
     engine.load(QUrl(QStringLiteral("qrc:/mbstudio/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) {
       kernel.log(LogLevel::Error, "qmlui", "the user interface could not be loaded");
+      qCritical("MB-Studio: the user interface could not be loaded (QML import paths: %s)",
+                qPrintable(engine.importPathList().join(QLatin1Char(';'))));
       return 3;
     }
     kernel.log(LogLevel::Info, "qmlui",
