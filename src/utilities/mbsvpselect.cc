@@ -1504,7 +1504,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", datalist);
+					mb_copy_arg(datalist, optarg, 1024);
 				}
 				else if (strcmp("method", options[option_index].name) == 0) {
 					int n1;
@@ -1564,7 +1564,7 @@ int main(int argc, char **argv) {
 					}
 				}
 				else if (strcmp("svplist", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", svplist);
+					mb_copy_arg(svplist, optarg, 1024);
 				}
 				else if (strcmp("verbose", options[option_index].name) == 0) {
 					verbose++;
@@ -1576,7 +1576,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", datalist);
+				mb_copy_arg(datalist, optarg, 1024);
 				break;
 			case 'N':
 			case 'n':
@@ -1644,7 +1644,7 @@ int main(int argc, char **argv) {
 			}
 			case 'S':
 			case 's':
-				sscanf(optarg, "%1023s", svplist);
+				mb_copy_arg(svplist, optarg, 1024);
 				break;
 			case 'V':
 			case 'v':

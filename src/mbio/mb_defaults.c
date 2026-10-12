@@ -41,7 +41,7 @@
 #include <string.h>
 #include <time.h>
 #ifdef _WIN32
-#include <winsock2.h> /* for gethostname() */
+#include <windows.h> /* for GetComputerNameA() */
 #else
 #include <unistd.h>
 #endif
@@ -49,7 +49,53 @@
 #include "mb_define.h"
 #include "mb_status.h"
 
-const char *HOME = "HOME";
+/*--------------------------------------------------------------------*/
+/* Copy a command line option argument (typically a file path) into dest,
+   a buffer of size bytes. Unlike sscanf(optarg, "%s", dest) this keeps
+   embedded spaces, so that paths such as "C:\\Users\\First Last\\line.mb88"
+   or "/Volumes/Survey Data/line.mb88" work. Leading and trailing white space
+   is removed and the result is always null terminated. Returns dest. */
+char *mb_copy_arg(char *dest, const char *src, size_t size) {
+  if (dest == NULL || size == 0)
+    return dest;
+  dest[0] = '\0';
+  if (src == NULL)
+    return dest;
+  while (*src == ' ' || *src == '\t' || *src == '\n' || *src == '\r')
+    src++;
+  size_t len = strlen(src);
+  while (len > 0 && (src[len - 1] == ' ' || src[len - 1] == '\t' || src[len - 1] == '\n' || src[len - 1] == '\r'))
+    len--;
+  if (len > size - 1)
+    len = size - 1;
+  memcpy(dest, src, len);
+  dest[len] = '\0';
+  return dest;
+}
+
+/*--------------------------------------------------------------------*/
+/* Return the user's home directory, where MB-System keeps its defaults
+   files (.mbio_defaults, ...). POSIX systems use $HOME. Windows does not set
+   HOME by default, so there fall back to %USERPROFILE% and then to
+   %HOMEDRIVE%%HOMEPATH%. Returns NULL if no home directory is known. */
+const char *mb_get_home_dir(void) {
+  const char *home = getenv("HOME");
+  if (home != NULL && home[0] != '\0')
+    return home;
+#ifdef _WIN32
+  home = getenv("USERPROFILE");
+  if (home != NULL && home[0] != '\0')
+    return home;
+  static char home_buffer[MB_PATH_MAXLINE];
+  const char *drive = getenv("HOMEDRIVE");
+  const char *path = getenv("HOMEPATH");
+  if (drive != NULL && path != NULL) {
+    snprintf(home_buffer, sizeof(home_buffer), "%s%s", drive, path);
+    return home_buffer;
+  }
+#endif
+  return NULL;
+}
 
 /*--------------------------------------------------------------------*/
 int mb_version(int verbose, char *version_string, int *version_id, int *version_major, 
@@ -109,16 +155,27 @@ int mb_user_host_date(int verbose, char user[256], char host[256], char date[32]
   char *unknown = "Unknown";
 	if ((user_ptr = getenv("USER")) == NULL)
 		if ((user_ptr = getenv("LOGNAME")) == NULL)
-      user_ptr = unknown;
+		  if ((user_ptr = getenv("USERNAME")) == NULL) /* Windows */
+        user_ptr = unknown;
 	strncpy(user, user_ptr, 255);
 
   memset(host, 0, 256);
-	gethostname(host, 255);
-  if (host[0] == '\0') { // Don't know why but gethostname() fails on Windows, so get the same info from ENV
-    const char *host_ptr = getenv("USERDOMAIN");
+#ifdef _WIN32
+  /* gethostname() requires Winsock to be initialized with WSAStartup(), so
+     ask Windows for the computer name directly */
+  DWORD host_size = 255;
+  if (!GetComputerNameA(host, &host_size))
+    host[0] = '\0';
+  if (host[0] == '\0') {
+    const char *host_ptr = getenv("COMPUTERNAME");
+    if (host_ptr == NULL)
+      host_ptr = getenv("USERDOMAIN");
     if (host_ptr != NULL)
       strncpy(host, host_ptr, 255);
   }
+#else
+	gethostname(host, 255);
+#endif
 
   memset(date, 0, 32);
 	time_t right_now = time((time_t *)0);
@@ -225,7 +282,7 @@ int mb_defaults(int verbose, int *format, int *pings, int *lonflip,
                   bounds, btime_i, etime_i, speedmin, timegap);
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -299,7 +356,7 @@ int mb_env(int verbose, char *psdisplay, char *imgdisplay, char *mbproject) {
   strcpy(mbproject, "none");
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -347,7 +404,7 @@ int mb_lonflip(int verbose, int *lonflip) {
   *lonflip = 0;
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -403,7 +460,7 @@ int mb_mbview_defaults(int verbose, int *primary_colortable, int *primary_colort
   *slope_magnitude = 1.0;
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -476,7 +533,7 @@ int mb_fbtversion(int verbose, int *fbtversion) {
   *fbtversion = 3;
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -527,7 +584,7 @@ int mb_uselockfiles(int verbose, bool *uselockfiles) {
   *uselockfiles = true;
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);
@@ -576,7 +633,7 @@ int mb_fileiobuffer(int verbose, int *fileiobuffer) {
   *fileiobuffer = 0;
 
   /* set the filename */
-  const char *home_ptr = getenv(HOME);
+  const char *home_ptr = mb_get_home_dir();
   if (home_ptr != NULL) {
     char file[MB_PATH_MAXLINE];
     strcpy(file, home_ptr);

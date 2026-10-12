@@ -396,7 +396,7 @@ int mbedit_init(int argc, char **argv, int *startup_file, int *startup_use_esf) 
 				gui_mode = true;
 			}
 			else if (strcmp("input", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", ifile);
+				mb_copy_arg(ifile, optarg, 1024);
 				do_parse_datalist(ifile, format);
 				fileflag++;
 			}
@@ -439,7 +439,7 @@ int mbedit_init(int argc, char **argv, int *startup_file, int *startup_use_esf) 
 			break;
 		case 'I':
 		case 'i':
-			sscanf(optarg, "%1023s", ifile);
+			mb_copy_arg(ifile, optarg, 1024);
 			do_parse_datalist(ifile, format);
 			fileflag++;
 			break;

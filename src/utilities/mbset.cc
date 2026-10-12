@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("look-for-files", options[option_index].name) == 0) {
 					lookforfiles = true;
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':

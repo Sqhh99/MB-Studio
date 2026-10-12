@@ -349,10 +349,10 @@ int main(int argc, char **argv) {
 						gainwindow = 0.0;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", segyfile);
+					mb_copy_arg(segyfile, optarg, 1024);
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", fileroot);
+					mb_copy_arg(fileroot, optarg, 1024);
 				}
 				else if (strcmp("distance-plot", options[option_index].name) == 0) {
 					const int n = sscanf(optarg, "%lf/%lf/%lf/%lf/%lf", &distancebin, &startlon, &endlon, &startlat, &endlat);
@@ -465,11 +465,11 @@ int main(int argc, char **argv) {
 			}
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", segyfile);
+				mb_copy_arg(segyfile, optarg, 1024);
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", fileroot);
+				mb_copy_arg(fileroot, optarg, 1024);
 				break;
 			case 'R':
 			case 'r':

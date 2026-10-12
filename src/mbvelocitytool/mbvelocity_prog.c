@@ -281,10 +281,10 @@ int mbvt_init(int argc, char **argv) {
 				btime_i[6] = 0;
 			}
 			else if (strcmp("display-svp-file", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", sfile);
+				mb_copy_arg(sfile, optarg, 1024);
 			}
 			else if (strcmp("edit-svp-file", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", wfile);
+				mb_copy_arg(wfile, optarg, 1024);
 			}
 			else if (strcmp("end-time", options[option_index].name) == 0) {
 				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
@@ -294,7 +294,7 @@ int mbvt_init(int argc, char **argv) {
 				sscanf(optarg, "%d", &format);
 			}
 			else if (strcmp("input", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", ifile);
+				mb_copy_arg(ifile, optarg, 1024);
 			}
 			break;
 		case 'H':
@@ -321,15 +321,15 @@ int mbvt_init(int argc, char **argv) {
 			break;
 		case 'I':
 		case 'i':
-			sscanf(optarg, "%1023s", ifile);
+			mb_copy_arg(ifile, optarg, 1024);
 			break;
 		case 'S':
 		case 's':
-			sscanf(optarg, "%1023s", sfile);
+			mb_copy_arg(sfile, optarg, 1024);
 			break;
 		case 'W':
 		case 'w':
-			sscanf(optarg, "%1023s", wfile);
+			mb_copy_arg(wfile, optarg, 1024);
 			break;
 		case '?':
 			errflg++;

@@ -254,8 +254,15 @@ int xdr_opaque(XDR *xdrs,char* cp,unsigned int cnt) {
   case XDR_ENCODE:
      if (!xdrPutBytes(xdrs, cp, cnt)) return (FALSE);
      if (rndup == 0) return(TRUE);
+     {
+       /* XDR (RFC 4506) pads opaque data with zeros to a multiple of four
+          bytes, exactly as the SunRPC/TIRPC implementation used on POSIX
+          systems does; without this, files written on Windows would not be
+          readable elsewhere (and by the decoder above). */
+       char xdr_zero[BYTES_PER_XDR_UNIT] = {0, 0, 0, 0};
+       return (xdrPutBytes(xdrs, xdr_zero, rndup));
+     }
 
-/*     return (xdrPutBytes(xdrs, xdr_zero, rndup)); */
   case XDR_FREE:
      return(TRUE);
 

@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", swathdata);
+					mb_copy_arg(swathdata, optarg, 1024);
 				}
 				else if (strcmp("lag-range", options[option_index].name) == 0) {
 					sscanf(optarg, "%d/%lf/%lf", &nlag, &lagstart, &lagend);
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &npings);
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", outroot);
+					mb_copy_arg(outroot, optarg, 1024);
 					outroot_defined = true;
 				}
 				else if (strcmp("roll-source", options[option_index].name) == 0) {
@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", swathdata);
+				mb_copy_arg(swathdata, optarg, 1024);
 				break;
 			case 'K':
 			case 'k':
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", outroot);
+				mb_copy_arg(outroot, optarg, 1024);
 				outroot_defined = true;
 				break;
 			case 'S':

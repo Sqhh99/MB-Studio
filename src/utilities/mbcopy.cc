@@ -1716,7 +1716,7 @@ int main(int argc, char **argv) {
           btime_i[6] = 1000000 * (seconds - btime_i[5]);
         }
         else if (strcmp("comment-file", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", commentfile);
+          mb_copy_arg(commentfile, optarg, 1024);
           insertcomments = true;
         }
         else if (strcmp("bathymetry-only", options[option_index].name) == 0) {
@@ -1737,7 +1737,7 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", ifile);
+          mb_copy_arg(ifile, optarg, 1024);
         }
         else if (strcmp("lonflip", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &lonflip);
@@ -1758,7 +1758,7 @@ int main(int argc, char **argv) {
           }
         }
         else if (strcmp("output", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", ofile);
+          mb_copy_arg(ofile, optarg, 1024);
         }
         else if (strcmp("ping-average", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &pings);
@@ -1792,7 +1792,7 @@ int main(int argc, char **argv) {
       }
       case 'C':
       case 'c':
-        sscanf(optarg, "%1023s", commentfile);
+        mb_copy_arg(commentfile, optarg, 1024);
         insertcomments = true;
         break;
       case 'D':
@@ -1822,7 +1822,7 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", ifile);
+        mb_copy_arg(ifile, optarg, 1024);
         break;
       case 'L':
       case 'l':
@@ -1849,7 +1849,7 @@ int main(int argc, char **argv) {
         break;
       case 'O':
       case 'o':
-        sscanf(optarg, "%1023s", ofile);
+        mb_copy_arg(ofile, optarg, 1024);
         break;
       case 'P':
       case 'p':

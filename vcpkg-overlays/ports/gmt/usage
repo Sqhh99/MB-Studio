@@ -1,0 +1,6 @@
+gmt provides the GMT C API (gmt.h) and the gmt driver program.
+
+MB-System locates it with its own build-utils/FindGMT.cmake:
+
+    set(GMT_ROOT "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    find_package(GMT REQUIRED)

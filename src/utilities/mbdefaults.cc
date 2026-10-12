@@ -164,12 +164,12 @@ int main(int argc, char **argv) {
 					flag = true;
 				}
 				else if (strcmp("ps-display", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", psdisplay);
+					mb_copy_arg(psdisplay, optarg, 1024);
 					flag = true;
 				}
 				else if (strcmp("fbt-version", options[option_index].name) == 0) {
 					char argstring[MB_PATH_MAXLINE];
-					sscanf(optarg, "%1023s", argstring);
+					mb_copy_arg(argstring, optarg, 1024);
 					if (strncmp(argstring, "new", 3) == 0 || strncmp(argstring, "NEW", 3) == 0)
 						fbtversion = 3;
 					else if (strncmp(argstring, "old", 2) == 0 || strncmp(argstring, "OLD", 2) == 0)
@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("image-display", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", imgdisplay);
+					mb_copy_arg(imgdisplay, optarg, 1024);
 					flag = true;
 				}
 				else if (strcmp("lonflip", options[option_index].name) == 0) {
@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
 				}
 				else if (strcmp("use-lock-files", options[option_index].name) == 0) {
 					char argstring[MB_PATH_MAXLINE];
-					sscanf(optarg, "%1023s", argstring);
+					mb_copy_arg(argstring, optarg, 1024);
 					if (strncmp(argstring, "yes", 3) == 0 || strncmp(argstring, "YES", 3) == 0)
 						uselockfiles = true;
 					else if (strncmp(argstring, "no", 2) == 0 || strncmp(argstring, "NO", 2) == 0)
@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
 					verbose++;
 				}
 				else if (strcmp("project", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", mbproject);
+					mb_copy_arg(mbproject, optarg, 1024);
 					flag = true;
 				}
 				break;
@@ -247,14 +247,14 @@ int main(int argc, char **argv) {
 				break;
 			case 'D':
 			case 'd':
-				sscanf(optarg, "%1023s", psdisplay);
+				mb_copy_arg(psdisplay, optarg, 1024);
 				flag = true;
 				break;
 			case 'F':
 			case 'f':
 			{
 				char argstring[MB_PATH_MAXLINE];
-				sscanf(optarg, "%1023s", argstring);
+				mb_copy_arg(argstring, optarg, 1024);
 				if (strncmp(argstring, "new", 3) == 0 || strncmp(argstring, "NEW", 3) == 0)
 					fbtversion = 3;
 				else if (strncmp(argstring, "old", 2) == 0 || strncmp(argstring, "OLD", 2) == 0)
@@ -268,7 +268,7 @@ int main(int argc, char **argv) {
 			}
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", imgdisplay);
+				mb_copy_arg(imgdisplay, optarg, 1024);
 				flag = true;
 				break;
 			case 'H':
@@ -316,7 +316,7 @@ int main(int argc, char **argv) {
 			case 'u':
 			{
 				char argstring[MB_PATH_MAXLINE];
-				sscanf(optarg, "%1023s", argstring);
+				mb_copy_arg(argstring, optarg, 1024);
 				if (strncmp(argstring, "yes", 3) == 0 || strncmp(argstring, "YES", 3) == 0)
 					uselockfiles = true;
 				else if (strncmp(argstring, "no", 2) == 0 || strncmp(argstring, "NO", 2) == 0)
@@ -334,7 +334,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'W':
 			case 'w':
-				sscanf(optarg, "%1023s", mbproject);
+				mb_copy_arg(mbproject, optarg, 1024);
 				flag = true;
 				break;
 			case '?':
@@ -409,9 +409,9 @@ int main(int argc, char **argv) {
 
 	/* write out new ~/.mbio_defaults file if needed */
 	if (flag) {
-		const char *home = getenv("HOME");
+		const char *home = mb_get_home_dir();
 		if (home == nullptr) {
-			fprintf(stderr, "Could not determine home directory (HOME environment variable not set)\n");
+			fprintf(stderr, "Could not determine home directory (HOME or USERPROFILE environment variable not set)\n");
 			exit(MB_ERROR_OPEN_FAIL);
 		}
 		char file[MB_PATH_MAXLINE];

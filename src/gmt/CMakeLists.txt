@@ -107,4 +107,11 @@ target_include_directories(mbsystem PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(mbsystem PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(mbsystem GMT::GMT GMT::PSL mbio mbaux)
 
-install(TARGETS mbsystem DESTINATION ${CMAKE_INSTALL_LIBDIR})
+if(WIN32)
+  # GMT for Windows discovers supplement DLLs in <bindir>/gmt_plugins.
+  install(TARGETS mbsystem
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/gmt_plugins
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+else()
+  install(TARGETS mbsystem DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()

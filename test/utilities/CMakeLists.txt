@@ -47,5 +47,5 @@ set(tests
     mbvoxelclean_test)
 
 foreach(test ${tests})
-  add_test(NAME ${test} COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/${test}.py")
+  mb_add_python_test(${test} ${test}.py)
 endforeach()

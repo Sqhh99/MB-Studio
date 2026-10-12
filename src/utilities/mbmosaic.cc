@@ -1233,10 +1233,10 @@ int main(int argc, char **argv) {
 					}
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", filelist);
+					mb_copy_arg(filelist, optarg, 1024);
 				}
 				else if (strcmp("projection", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", projection_pars);
+					mb_copy_arg(projection_pars, optarg, 1024);
 					projection_pars_f = true;
 				}
 				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
@@ -1249,7 +1249,7 @@ int main(int argc, char **argv) {
 					use_NaN = true;
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", fileroot);
+					mb_copy_arg(fileroot, optarg, 1024);
 				}
 				else if (strcmp("pings", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &pings);
@@ -1269,7 +1269,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%lf", &speedmin);
 				}
 				else if (strcmp("topography-grid", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", topogridfile);
+					mb_copy_arg(topogridfile, optarg, 1024);
 					usetopogrid = true;
 				}
 				else if (strcmp("directional-priority", options[option_index].name) == 0) {
@@ -1323,7 +1323,7 @@ int main(int argc, char **argv) {
 						}
 					}
 					if (priority_source == MBMOSAIC_PRIORITYTABLE_FILE) {
-						sscanf(optarg, "%1023s", pfile);
+						mb_copy_arg(pfile, optarg, 1024);
 					}
 					else if (priority_source == MBMOSAIC_PRIORITYTABLE_60DEGREESUP) {
 						n_priority_angle = n_priority_angle_60degreesup;
@@ -1471,11 +1471,11 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", filelist);
+				mb_copy_arg(filelist, optarg, 1024);
 				break;
 			case 'J':
 			case 'j':
-				sscanf(optarg, "%1023s", projection_pars);
+				mb_copy_arg(projection_pars, optarg, 1024);
 				projection_pars_f = true;
 				break;
 			case 'L':
@@ -1492,7 +1492,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", fileroot);
+				mb_copy_arg(fileroot, optarg, 1024);
 				break;
 			case 'P':
 			case 'p':
@@ -1516,7 +1516,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'T':
 			case 't':
-				sscanf(optarg, "%1023s", topogridfile);
+				mb_copy_arg(topogridfile, optarg, 1024);
 				usetopogrid = true;
 				break;
 			case 'U':
@@ -1581,7 +1581,7 @@ int main(int argc, char **argv) {
           }
         }
 				if (priority_source == MBMOSAIC_PRIORITYTABLE_FILE) {
-					sscanf(optarg, "%1023s", pfile);
+					mb_copy_arg(pfile, optarg, 1024);
 				}
 				else if (priority_source == MBMOSAIC_PRIORITYTABLE_60DEGREESUP) {
 					n_priority_angle = n_priority_angle_60degreesup;

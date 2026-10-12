@@ -3,6 +3,7 @@
 // See README file for copying and redistribution conditions.
 
 #include <cstdlib>
+#include <regex>
 
 #include "mb_define.h"
 #include "mb_status.h"
@@ -25,8 +26,11 @@ TEST(MbVersion, Basic) {
             mb_version(verbose, version_string, &version_id, &version_major,
                        &version_minor, &version_archive, &error));
   EXPECT_EQ(MB_ERROR_NO_ERROR, error);
-  EXPECT_THAT(version_string,
-              testing::ContainsRegex("^[0-9]+[.][0-9]+[.][0-9]+"));
+  // std::regex rather than testing::ContainsRegex: googletest only has a
+  // "simple" regex engine without bracket expressions on Windows.
+  EXPECT_TRUE(std::regex_search(version_string,
+                                std::regex("^[0-9]+[.][0-9]+[.][0-9]+")))
+      << version_string;
   EXPECT_GE(version_id, 50700009);
   EXPECT_LT(version_id, 70000000);
   EXPECT_GE(version_major, 4);

@@ -254,7 +254,7 @@ int mbeditviz_init(int argc, char **argv,
         sscanf(optarg, "%d", &mbdef_format);
       }
       else if (strcmp("input", options[option_index].name) == 0) {
-        sscanf(optarg, "%1023s", ifile);
+        mb_copy_arg(ifile, optarg, 1024);
         input_file_set = true;
       }
       else if (strcmp("simple-mean-grid", options[option_index].name) == 0) {
@@ -279,7 +279,7 @@ int mbeditviz_init(int argc, char **argv,
       break;
     case 'I':
     case 'i':
-      sscanf(optarg, "%1023s", ifile);
+      mb_copy_arg(ifile, optarg, 1024);
       input_file_set = true;
       break;
     case 'R':

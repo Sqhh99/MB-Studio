@@ -3053,6 +3053,37 @@ int mb_get_format(int verbose, char *filename, char *fileroot, int *format, int 
   return (status);
 }
 /*--------------------------------------------------------------------*/
+/* Portable path helpers used when resolving datalist and imagelist entries
+   relative to the list file. On Windows a path is also absolute when it
+   starts with a backslash or a drive letter ("C:\\data" or "C:/data"), and
+   the list file's own path is stored with forward slashes (which the Windows
+   C runtime accepts) so that its directory can be found the same way as on
+   POSIX systems. */
+bool mb_path_is_absolute(const char *path) {
+  if (path == NULL || path[0] == '\0')
+    return false;
+  if (path[0] == '/')
+    return true;
+#ifdef _WIN32
+  if (path[0] == '\\')
+    return true;
+  if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':')
+    return true;
+#endif
+  return false;
+}
+
+void mb_path_normalize_separators(char *path) {
+#ifdef _WIN32
+  for (char *c = path; c != NULL && *c != '\0'; c++)
+    if (*c == '\\')
+      *c = '/';
+#else
+  (void)path;
+#endif
+}
+
+/*--------------------------------------------------------------------*/
 int mb_datalist_open(int verbose, void **datalist_ptr, char *path, int look_processed, int *error) {
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -3091,6 +3122,7 @@ int mb_datalist_open(int verbose, void **datalist_ptr, char *path, int look_proc
     }
     else {
       strcpy(datalist->path, path);
+      mb_path_normalize_separators(datalist->path);
       datalist->open = true;
     }
   }
@@ -3374,7 +3406,7 @@ int mb_datalist_read2(int verbose, void *datalist_ptr, int *pstatus, char *path,
             nscan = sscanf(&(buffer[istart]), "%s %d %lf", path, format, weight);
 
             /* get path */
-            if (nscan >= 1 && path[0] != '/' && strrchr(datalist->path, '/') != NULL &&
+            if (nscan >= 1 && !mb_path_is_absolute(path) && strrchr(datalist->path, '/') != NULL &&
                 (len = strrchr(datalist->path, '/') - datalist->path + 1) > 1) {
               strcpy(tmpstr, path);
               strncpy(path, datalist->path, len);
@@ -3415,7 +3447,7 @@ int mb_datalist_read2(int verbose, void *datalist_ptr, int *pstatus, char *path,
             pfile[0] = '\0';
             if (file_ok) {
               mb_pr_get_ofile(verbose, path, &pfile_specified, pfile, error);
-              if (strlen(pfile) > 0 && pfile[0] != '/' && strrchr(path, '/') != NULL &&
+              if (strlen(pfile) > 0 && !mb_path_is_absolute(pfile) && strrchr(path, '/') != NULL &&
                   (len = strrchr(path, '/') - path + 1) > 1) {
                 strcpy(tmpstr, pfile);
                 strncpy(pfile, path, len);
@@ -3668,7 +3700,7 @@ int mb_datalist_read3(int verbose, void *datalist_ptr,
             }
 
             /* get path */
-            if (nscan >= 1 && path[0] != '/' && strrchr(datalist->path, '/') != NULL &&
+            if (nscan >= 1 && !mb_path_is_absolute(path) && strrchr(datalist->path, '/') != NULL &&
                 (len = strrchr(datalist->path, '/') - datalist->path + 1) > 1) {
               strcpy(tmpstr, path);
               strncpy(path, datalist->path, len);
@@ -3709,7 +3741,7 @@ int mb_datalist_read3(int verbose, void *datalist_ptr,
             pfile[0] = '\0';
             if (file_ok) {
               mb_pr_get_ofile(verbose, path, &pfile_specified, pfile, error);
-              if (strlen(pfile) > 0 && pfile[0] != '/' && strrchr(path, '/') != NULL &&
+              if (strlen(pfile) > 0 && !mb_path_is_absolute(pfile) && strrchr(path, '/') != NULL &&
                   (len = strrchr(path, '/') - path + 1) > 1) {
                 strcpy(tmpstr, pfile);
                 strncpy(pfile, path, len);
@@ -3955,6 +3987,7 @@ int mb_imagelist_open(int verbose, void **imagelist_ptr, char *path, int *error)
     }
     else {
       strcpy(imagelist->path, path);
+      mb_path_normalize_separators(imagelist->path);
       imagelist->open = true;
     }
   }
@@ -4118,7 +4151,7 @@ int mb_imagelist_read(int verbose, void *imagelist_ptr,
                   /* if relative path make it global */
                   if (strcmp(path0, "NULL") != 0) {
                       int len;
-                      if (path0[0] != '/' && strrchr(imagelist->path, '/') != NULL &&
+                      if (!mb_path_is_absolute(path0) && strrchr(imagelist->path, '/') != NULL &&
                           (len = strrchr(imagelist->path, '/') - imagelist->path + 1) > 1) {
                           char tmpstr[MB_PATH_MAXLINE];
                           strcpy(tmpstr, path0);
@@ -4145,7 +4178,7 @@ int mb_imagelist_read(int verbose, void *imagelist_ptr,
                   /* if relative path make it global */
                   if (strcmp(path1, "NULL") != 0) {
                       int len;
-                      if (path1[0] != '/' && strrchr(imagelist->path, '/') != NULL &&
+                      if (!mb_path_is_absolute(path1) && strrchr(imagelist->path, '/') != NULL &&
                           (len = strrchr(imagelist->path, '/') - imagelist->path + 1) > 1) {
                           char tmpstr[MB_PATH_MAXLINE];
                           strcpy(tmpstr, path1);
@@ -4182,7 +4215,7 @@ int mb_imagelist_read(int verbose, void *imagelist_ptr,
 
                       /* if relative path make it global */
                       int len;
-                      if (path0[0] != '/' && strrchr(imagelist->path, '/') != NULL &&
+                      if (!mb_path_is_absolute(path0) && strrchr(imagelist->path, '/') != NULL &&
                           (len = strrchr(imagelist->path, '/') - imagelist->path + 1) > 1) {
                           char tmpstr[MB_PATH_MAXLINE];
                           strcpy(tmpstr, path0);
@@ -4224,7 +4257,7 @@ int mb_imagelist_read(int verbose, void *imagelist_ptr,
 
                       /* if relative path make it global */
                       int len;
-                      if (path0[0] != '/' && strrchr(imagelist->path, '/') != NULL &&
+                      if (!mb_path_is_absolute(path0) && strrchr(imagelist->path, '/') != NULL &&
                           (len = strrchr(imagelist->path, '/') - imagelist->path + 1) > 1) {
                           char tmpstr[MB_PATH_MAXLINE];
                           strcpy(tmpstr, path0);

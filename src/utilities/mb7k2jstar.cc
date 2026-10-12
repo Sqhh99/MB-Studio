@@ -236,17 +236,17 @@ int main(int argc, char **argv) {
 					gainmode = (ssgain_t)tmp;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("line-root", options[option_index].name) == 0) {
 					sscanf(optarg, "%d/%1023s", &startline, lineroot);
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", output_file);
+					mb_copy_arg(output_file, optarg, 1024);
 					output_file_set = true;
 				}
 				else if (strcmp("route-file", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", route_file);
+					mb_copy_arg(route_file, optarg, 1024);
 					route_file_set = true;
 				}
 				else if (strcmp("smooth", options[option_index].name) == 0) {
@@ -327,7 +327,7 @@ int main(int argc, char **argv) {
 			}
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':
@@ -339,12 +339,12 @@ int main(int argc, char **argv) {
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", output_file);
+				mb_copy_arg(output_file, optarg, 1024);
 				output_file_set = true;
 				break;
 			case 'R':
 			case 'r':
-				sscanf(optarg, "%1023s", route_file);
+				mb_copy_arg(route_file, optarg, 1024);
 				route_file_set = true;
 				break;
 			case 'S':

@@ -643,14 +643,14 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", filelist);
+          mb_copy_arg(filelist, optarg, 1024);
         }
         else if (strcmp("projection", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", projection_pars);
+          mb_copy_arg(projection_pars, optarg, 1024);
           projection_pars_f = true;
         }
         else if (strcmp("background-data", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", backgroundfile);
+          mb_copy_arg(backgroundfile, optarg, 1024);
           if ((grdrasterid = (int)strtol(backgroundfile, NULL, 10)) <= 0)
             grdrasterid = -1;
         }
@@ -664,7 +664,7 @@ int main(int argc, char **argv) {
           use_NaN = true;
         }
         else if (strcmp("output", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", fileroot);
+          mb_copy_arg(fileroot, optarg, 1024);
         }
         else if (strcmp("pings", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &pings);
@@ -822,16 +822,16 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", filelist);
+        mb_copy_arg(filelist, optarg, 1024);
         break;
       case 'J':
       case 'j':
-        sscanf(optarg, "%1023s", projection_pars);
+        mb_copy_arg(projection_pars, optarg, 1024);
         projection_pars_f = true;
         break;
       case 'K':
       case 'k':
-        sscanf(optarg, "%1023s", backgroundfile);
+        mb_copy_arg(backgroundfile, optarg, 1024);
         if ((grdrasterid = (int)strtol(backgroundfile, NULL, 10)) <= 0)
           grdrasterid = -1;
         break;
@@ -849,7 +849,7 @@ int main(int argc, char **argv) {
         break;
       case 'O':
       case 'o':
-        sscanf(optarg, "%1023s", fileroot);
+        mb_copy_arg(fileroot, optarg, 1024);
         break;
       case 'P':
       case 'p':

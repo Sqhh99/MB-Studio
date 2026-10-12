@@ -175,11 +175,11 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("output", options[option_index].name) == 0) {
           mb_path tmpstr;
-          sscanf(optarg, "%1023s", tmpstr);
+          mb_copy_arg(tmpstr, optarg, 1024);
           if (strcmp(tmpstr, "segy") == 0)
             snprintf(segy_suffix, sizeof(segy_suffix), "segy");
           else if (strcmp(tmpstr, "sgy") == 0)
@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%lf", &rangethreshold);
         }
         else if (strcmp("route", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", route_file);
+          mb_copy_arg(route_file, optarg, 1024);
           route_file_set = true;
         }
         else if (strcmp("sample-format", options[option_index].name) == 0) {
@@ -209,7 +209,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%d/%1023s", &startline, lineroot);
         }
         else if (strcmp("time-list", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", timelist_file);
+          mb_copy_arg(timelist_file, optarg, 1024);
           timelist_file_set = true;
         }
         else if (strcmp("time-shift", options[option_index].name) == 0) {
@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", read_file);
+        mb_copy_arg(read_file, optarg, 1024);
         break;
       case 'J':
       case 'j':
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
       case 'O':
       case 'o':
         mb_path tmpstr;
-        sscanf(optarg, "%1023s", tmpstr);
+        mb_copy_arg(tmpstr, optarg, 1024);
         if (strcmp(tmpstr, "segy") == 0)
           snprintf(segy_suffix, sizeof(segy_suffix), "segy");
         else if (strcmp(tmpstr, "sgy") == 0)
@@ -272,12 +272,12 @@ int main(int argc, char **argv) {
         break;
       case 'Q':
       case 'q':
-        sscanf(optarg, "%1023s", timelist_file);
+        mb_copy_arg(timelist_file, optarg, 1024);
         timelist_file_set = true;
         break;
       case 'R':
       case 'r':
-        sscanf(optarg, "%1023s", route_file);
+        mb_copy_arg(route_file, optarg, 1024);
         route_file_set = true;
         break;
       case 'S':

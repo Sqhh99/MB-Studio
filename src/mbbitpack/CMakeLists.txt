@@ -41,7 +41,10 @@ target_include_directories(mbbitpack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 #------------------------------------------------------------------------------
 # install it all
 #
-install(TARGETS mbbitpack DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbbitpack
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 #
 #------------------------------------------------------------------------------
 

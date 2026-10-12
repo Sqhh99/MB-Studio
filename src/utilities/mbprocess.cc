@@ -5852,14 +5852,14 @@ int main(int argc, char **argv) {
         }
         else if (strcmp("input", options[option_index].name) == 0) {
           mbp_ifile_specified = true;
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("strip-comments", options[option_index].name) == 0) {
           strip_comments = true;
         }
         else if (strcmp("output", options[option_index].name) == 0) {
           mbp_ofile_specified = true;
-          sscanf(optarg, "%1023s", mbp_ofile);
+          mb_copy_arg(mbp_ofile, optarg, 1024);
         }
         else if (strcmp("force", options[option_index].name) == 0) {
           checkuptodate = false;
@@ -5891,7 +5891,7 @@ int main(int argc, char **argv) {
       case 'I':
       case 'i':
         mbp_ifile_specified = true;
-        sscanf(optarg, "%1023s", read_file);
+        mb_copy_arg(read_file, optarg, 1024);
         break;
       case 'N':
       case 'n':
@@ -5900,7 +5900,7 @@ int main(int argc, char **argv) {
       case 'O':
       case 'o':
         mbp_ofile_specified = true;
-        sscanf(optarg, "%1023s", mbp_ofile);
+        mb_copy_arg(mbp_ofile, optarg, 1024);
         break;
       case 'P':
       case 'p':

@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
           good_nav_only = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("longitude-domain", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &lonflip);
@@ -285,7 +285,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':

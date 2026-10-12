@@ -945,7 +945,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%d", &decimate);
         }
         else if (strcmp("delimiter", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", delimiter);
+          mb_copy_arg(delimiter, optarg, 1024);
         }
         else if (strcmp("dump-mode", options[option_index].name) == 0) {
           int tmp;
@@ -972,7 +972,7 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("longitude-domain", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &lonflip);
@@ -984,7 +984,7 @@ int main(int argc, char **argv) {
           check_values = MBLIST_CHECK_OFF_RAW;
         }
         else if (strcmp("output-file", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", output_file);
+          mb_copy_arg(output_file, optarg, 1024);
         }
         else if (strcmp("output-format", options[option_index].name) == 0) {
           if (strcmp(optarg, "%fnv") == 0 || strcmp(optarg, "%FNV") == 0) {
@@ -1014,16 +1014,16 @@ int main(int argc, char **argv) {
           }
         }
         else if (strcmp("projection", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", projection_pars);
+          mb_copy_arg(projection_pars, optarg, 1024);
           use_projection = true;
         }
         else if (strcmp("secondary-file", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", secondary_file);
+          mb_copy_arg(secondary_file, optarg, 1024);
           secondary_file_set = true;
         }
         else if (strcmp("segment", options[option_index].name) == 0) {
           segment = true;
-          sscanf(optarg, "%1023s", segment_tag);
+          mb_copy_arg(segment_tag, optarg, 1024);
           if (strcmp(segment_tag, "swathfile") == 0)
             segment_mode = MBLIST_SEGMENT_MODE_SWATHFILE;
           else if (strcmp(segment_tag, "datalist") == 0)
@@ -1092,7 +1092,7 @@ int main(int argc, char **argv) {
         break;
       case 'G':
       case 'g':
-        sscanf(optarg, "%1023s", delimiter);
+        mb_copy_arg(delimiter, optarg, 1024);
         break;
       case 'F':
       case 'f':
@@ -1100,11 +1100,11 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", read_file);
+        mb_copy_arg(read_file, optarg, 1024);
         break;
       case 'J':
       case 'j':
-        sscanf(optarg, "%1023s", projection_pars);
+        mb_copy_arg(projection_pars, optarg, 1024);
         use_projection = true;
         break;
       case 'K':
@@ -1195,17 +1195,17 @@ int main(int argc, char **argv) {
         break;
       case 'X':
       case 'x':
-        sscanf(optarg, "%1023s", output_file);
+        mb_copy_arg(output_file, optarg, 1024);
         break;
       case 'Y':
       case 'y':
-        sscanf(optarg, "%1023s", secondary_file);
+        mb_copy_arg(secondary_file, optarg, 1024);
         secondary_file_set = true;
         break;
       case 'Z':
       case 'z':
         segment = true;
-        sscanf(optarg, "%1023s", segment_tag);
+        mb_copy_arg(segment_tag, optarg, 1024);
         if (strcmp(segment_tag, "swathfile") == 0)
           segment_mode = MBLIST_SEGMENT_MODE_SWATHFILE;
         else if (strcmp(segment_tag, "datalist") == 0)

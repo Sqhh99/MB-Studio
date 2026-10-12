@@ -799,7 +799,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("buffer-size", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &n_buffer_max);
@@ -929,7 +929,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'N':
 			case 'n':

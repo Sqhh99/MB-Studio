@@ -33,6 +33,7 @@
 #define MB_DEFINE_H_
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* Define version and date for this release */
@@ -421,6 +422,8 @@ struct mb_info_struct {
 /* Function prototypes from mb_defaults.c */
 int mb_version(int verbose, char *version_string, int *version_id, int *version_major, int *version_minor, int *version_archive,
                int *error);
+const char *mb_get_home_dir(void);
+char *mb_copy_arg(char *dest, const char *src, size_t size);
 int mb_user_host_date(int verbose, char user[256], char host[256], char date[32], int *error);
 int mb_default_defaults(int verbose, int *format, int *pings, int *lonflip, double bounds[4], int *btime_i, int *etime_i,
                 double *speedmin, double *timegap);
@@ -472,6 +475,8 @@ int mb_imagelist_close(int verbose, void **imagelist_ptr, int *error);
 int mb_get_relative_path(int verbose, char *path, char *pwd, int *error);
 int mb_get_absolute_path(int verbose, char *path, char *pwd, int *error);
 int mb_get_shortest_path(int verbose, char *path, int *error);
+bool mb_path_is_absolute(const char *path);
+void mb_path_normalize_separators(char *path);
 int mb_get_basename(int verbose, char *path, int *error);
 #ifdef WIN32
 void mb_cvt_to_nix_path(char *path);

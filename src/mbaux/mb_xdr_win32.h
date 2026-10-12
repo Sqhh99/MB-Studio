@@ -70,6 +70,10 @@ typedef struct
 } XDR;
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void xdrstdio_create(XDR* xdrs,FILE* file,XdrOp op);
 void xdr_destroy(XDR* xdrs);
 int xdr_long(XDR* xdrs,long* lp);
@@ -84,5 +88,9 @@ int xdr_opaque(XDR* xdrs,char* cp,unsigned int cnt);
 int xdr_bytes(XDR* xdrs,char** cpp,u_int* sizep,u_int maxsize);
 int xdr_double(XDR* xdrs,double *dp);
 int xdr_float(XDR* xdrs,float *fp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

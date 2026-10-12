@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("format", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &format);

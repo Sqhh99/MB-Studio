@@ -273,13 +273,13 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &nfft);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", segyfile);
+					mb_copy_arg(segyfile, optarg, 1024);
 				}
 				else if (strcmp("log-scale", options[option_index].name) == 0) {
 					logscale = true;
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", fileroot);
+					mb_copy_arg(fileroot, optarg, 1024);
 				}
 				else if (strcmp("shot-scale", options[option_index].name) == 0) {
 					const int n = sscanf(optarg, "%lf/%lf", &shotscale, &frequencyscale);
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", segyfile);
+				mb_copy_arg(segyfile, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':
@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
 			case 'G':
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", fileroot);
+				mb_copy_arg(fileroot, optarg, 1024);
 				break;
 			case 'S':
 			case 's':

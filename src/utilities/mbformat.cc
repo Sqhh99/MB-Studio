@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", file);
+					mb_copy_arg(file, optarg, 1024);
 					file_specified = true;
 				}
 				else if (strcmp("verbose", options[option_index].name) == 0) {
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", file);
+				mb_copy_arg(file, optarg, 1024);
 				file_specified = true;
 				break;
 			case 'V':
