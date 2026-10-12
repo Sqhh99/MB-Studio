@@ -598,13 +598,13 @@ int main(int argc, char **argv) {
 		/* generate plot shellscript for cross correlation file */
 		snprintf(cmdfile, sizeof(cmdfile), "mbm_xyplot -I%s -N", xcorfile);
 		fprintf(stderr, "Running: %s...\n", cmdfile);
-		/* int shellstatus = */ system(cmdfile);
+		/* int shellstatus = */ mb_system(cmdfile);
 
 		/* generate plot shellscript for time lag histogram */
 		snprintf(cmdfile, sizeof(cmdfile), "mbm_histplot -I%s -C%g -L\"Frequency Histogram of %s:Time Lag (sec):Frequency:\"", fhistfile, lagstep,
 		        swathfile);
 		fprintf(stderr, "Running: %s...\n", cmdfile);
-		/* int shellstatus = */ system(cmdfile);
+		/* int shellstatus = */ mb_system(cmdfile);
 
 		/* output peak time lag */
 		peakk = 0;
@@ -656,14 +656,14 @@ int main(int argc, char **argv) {
 		snprintf(cmdfile, sizeof(cmdfile), "mbm_xyplot -I%s -N -L\"Roll Correlation With Acrosstrack Slope:Time Lag (sec):Correlation:\"",
 		        xcorfiletot);
 		fprintf(stderr, "Running: %s...\n", cmdfile);
-		/* int shellstatus = */ system(cmdfile);
+		/* int shellstatus = */ mb_system(cmdfile);
 	}
 
 	/* generate plot shellscript for time lag histogram */
 	snprintf(cmdfile, sizeof(cmdfile), "mbm_histplot -I%s -C%g -L\"Frequency Histogram of %s:Time Lag (sec):Frequency:\"", histfile, lagstep,
 	        swathdata);
 	fprintf(stderr, "Running: %s...\n", cmdfile);
-	/* int shellstatus = */ system(cmdfile);
+	/* int shellstatus = */ mb_system(cmdfile);
 
 	/* generate plot shellscript for time lag model if it exists */
 	if (nmodel > 1 || nestimate > 1) {
@@ -673,7 +673,7 @@ int main(int argc, char **argv) {
 		snprintf(cmdfile, sizeof(cmdfile), "mbm_xyplot -I%s -ISc0.05:%s -I%s -ISc0.1:%s -L\"Time lag model of %s:Time (sec):Time Lag (sec):\"",
 		        modelfile, estimatefile, modelfile, modelfile, swathdata);
 		fprintf(stderr, "Running: %s...\n", cmdfile);
-		/* shellstatus = */ system(cmdfile);
+		/* shellstatus = */ mb_system(cmdfile);
 	}
 
 	/* deallocate memory for data arrays */

@@ -1517,7 +1517,7 @@ int main(int argc, char **argv) {
   /* close plotting script file */
   fclose(sfp);
   snprintf(command, sizeof(command), "chmod +x %s", scriptfile);
-  /* const int shellstatus = */ system(command);
+  /* const int shellstatus = */ mb_system(command);
   // TODO(schwehr): Check the shellstatus
 
   /* deallocate route arrays */
@@ -1571,19 +1571,19 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   if (sampleformat == MB_SEGY_SAMPLEFORMAT_ANALYTIC) {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_cor.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    int shellstatus = system(command);
+    int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_hil.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    shellstatus = system(command);
+    shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_env.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    shellstatus = system(command);
+    shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
@@ -1591,7 +1591,7 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   else if (sampleformat == MB_SEGY_SAMPLEFORMAT_ENVELOPE) {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_env.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    const int shellstatus = system(command);
+    const int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
@@ -1599,7 +1599,7 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   else /* if (sampleformat == MB_SEGY_SAMPLEFORMAT_TRACE) */ {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    const int shellstatus = system(command);
+    const int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }

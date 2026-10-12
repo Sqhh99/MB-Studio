@@ -5656,7 +5656,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   snprintf(command, sizeof(command), "mbinfo -F %d -I %s -G -N -O -M10/10/%.9f/%.9f/%.9f/%.9f",
           process->mbp_format, process->mbp_ofile,
           mask_bounds[0], mask_bounds[1], mask_bounds[2], mask_bounds[3]);
-  system(command);
+  mb_system(command);
 
   // close the *.resf file
   if (resf_fp != nullptr) {

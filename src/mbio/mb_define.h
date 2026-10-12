@@ -424,6 +424,7 @@ int mb_version(int verbose, char *version_string, int *version_id, int *version_
                int *error);
 const char *mb_get_home_dir(void);
 char *mb_copy_arg(char *dest, const char *src, size_t size);
+int mb_system(const char *command);
 int mb_user_host_date(int verbose, char user[256], char host[256], char date[32], int *error);
 int mb_default_defaults(int verbose, int *format, int *pings, int *lonflip, double bounds[4], int *btime_i, int *etime_i,
                 double *speedmin, double *timegap);

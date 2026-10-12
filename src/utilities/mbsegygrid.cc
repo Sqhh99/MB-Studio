@@ -139,7 +139,7 @@ int get_segy_limits(int verbose, char *segyfile, int *tracemode, int *tracestart
 			fprintf(stderr, "\nGenerating sinf file for %s\n", segyfile);
 		char command[MB_PATH_MAXLINE] = "";
 		snprintf(command, sizeof(command), "mbsegyinfo -I %s -O", segyfile);
-		/* int shellstatus = */ system(command);
+		/* int shellstatus = */ mb_system(command);
 	}
 
 	double delay0 = 0.0;
@@ -1201,7 +1201,7 @@ int main(int argc, char **argv) {
 	if (verbose) {
 		fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 	}
-	plot_status = system(plot_cmd);
+	plot_status = mb_system(plot_cmd);
 	// TODO(schwehr): man of mbm_grdplot does not describe the return code.  Only 0 is success.
 	if (plot_status != 0) {
 		fprintf(outfp, "\nError executing mbm_grdplot on grid file %s\n", gridfile);

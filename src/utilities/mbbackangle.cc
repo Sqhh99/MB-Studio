@@ -1691,7 +1691,7 @@ int main(int argc, char **argv) {
 				if (verbose) {
 					fprintf(stderr, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 				}
-				plot_status = system(plot_cmd);
+				plot_status = mb_system(plot_cmd);
 				if (plot_status == -1) {
 					fprintf(stderr, "\nError executing mbm_grdplot on grid file %s\n", gridfile);
 				}
@@ -1732,7 +1732,7 @@ int main(int argc, char **argv) {
 				if (verbose) {
 					fprintf(stderr, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 				}
-				plot_status = system(plot_cmd);
+				plot_status = mb_system(plot_cmd);
 				if (plot_status == -1) {
 					fprintf(stderr, "\nError executing mbm_grdplot on grid file %s\n", gridfile);
 				}

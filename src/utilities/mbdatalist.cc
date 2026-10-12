@@ -483,7 +483,7 @@ int main(int argc, char **argv) {
 				if (!look_bounds || file_in_bounds) {
 					fprintf(output, "Copying %s %d %f\n", file, format, file_weight);
 					snprintf(command, sizeof(command), "cp %s* .", file);
-					/* shellstatus = */ system(command);
+					/* shellstatus = */ mb_system(command);
 					char *filename = strrchr(file, '/');
 					if (filename != nullptr)
 						filename++;
@@ -492,7 +492,7 @@ int main(int argc, char **argv) {
 					if (nfile == 1)
 						/* shellstatus = */ remove("datalist.mb-1");
 					snprintf(command, sizeof(command), "echo %s %d %f >> datalist.mb-1", filename, format, file_weight);
-					/* shellstatus = */ system(command);
+					/* shellstatus = */ mb_system(command);
 				}
 			}
 

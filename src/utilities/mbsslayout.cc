@@ -2763,7 +2763,7 @@ int main(int argc, char **argv) {
 	fclose(sfp);
 	char command[2*MB_PATH_MAXLINE+50] = "";
 	snprintf(command, sizeof(command), "chmod +x %s", scriptfile);
-	/* int shellstatus = */ system(command);
+	/* int shellstatus = */ mb_system(command);
 
 	/* output data counts */
 	if (verbose > 0) {

@@ -1041,7 +1041,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				break;
 			}
 			case 1:
@@ -1088,7 +1088,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -P ");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				break;
 			}
 			case 2:
@@ -1133,7 +1133,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -P ");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				fprintf(fresult, "%s\n", "=============================================================");
 				break;
 			}
@@ -1195,7 +1195,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 			/************calculate the nearest in position within time***************************/
 			if (p_flag == 2) {
@@ -1275,7 +1275,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 			if (p_flag == 3) {
 				// SVP nearest in time within range
@@ -1463,7 +1463,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 		}
 	}

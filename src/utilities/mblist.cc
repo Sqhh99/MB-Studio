@@ -5926,11 +5926,11 @@ if (error == MB_ERROR_NO_ERROR)
     /* convert cdl to netcdf */
     if (!netcdf_cdl) {
       snprintf(output_file_temp, sizeof(output_file_temp), "ncgen -o %s %s.cdl", output_file, output_file);
-      const int shellstatus = system(output_file_temp);
+      const int shellstatus = mb_system(output_file_temp);
       if (shellstatus == 0) {
         snprintf(output_file_temp, sizeof(output_file_temp), "rm %s.cdl", output_file);
         // TODO(schwehr): Check return of system.
-        /* shellstatus = */ system(output_file_temp);
+        /* shellstatus = */ mb_system(output_file_temp);
       }
     }
   } else {

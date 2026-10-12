@@ -50,6 +50,50 @@
 #include "mb_status.h"
 
 /*--------------------------------------------------------------------*/
+/* Run a shell command on behalf of an MB-System program (wrapper around
+   system()). On Windows:
+   - the directory containing the running program is put at the front of
+     PATH, so that chained MB-System programs (mbinfo, mbsegyinfo, ...) and
+     the bundled gmt.exe are found even if the installation is not on PATH;
+   - the mbm_* plotting macros (Perl/shell scripts) are not available, so
+     such commands are skipped with a notice instead of failing. */
+int mb_system(const char *command) {
+  if (command == NULL)
+    return system(NULL);
+#ifdef _WIN32
+  const char *c = command;
+  while (*c == ' ' || *c == '\t')
+    c++;
+  if (strncmp(c, "mbm_", 4) == 0) {
+    fprintf(stderr, "\nNote: the MB-System plot macro command\n\t%s\n"
+                    "was skipped (mbm_* macros are not available on Windows).\n", command);
+    return 0;
+  }
+  static bool path_set = false;
+  if (!path_set) {
+    path_set = true;
+    char exe[MB_PATH_MAXLINE];
+    const DWORD n = GetModuleFileNameA(NULL, exe, sizeof(exe));
+    if (n > 0 && n < sizeof(exe)) {
+      char *sep = strrchr(exe, '\\');
+      if (sep != NULL) {
+        *sep = '\0';
+        const char *path = getenv("PATH");
+        const size_t len = strlen(exe) + (path != NULL ? strlen(path) : 0) + 2;
+        char *newpath = (char *)malloc(len);
+        if (newpath != NULL) {
+          snprintf(newpath, len, "%s;%s", exe, path != NULL ? path : "");
+          _putenv_s("PATH", newpath);
+          free(newpath);
+        }
+      }
+    }
+  }
+#endif
+  return system(command);
+}
+
+/*--------------------------------------------------------------------*/
 /* Copy a command line option argument (typically a file path) into dest,
    a buffer of size bytes. Unlike sscanf(optarg, "%s", dest) this keeps
    embedded spaces, so that paths such as "C:\\Users\\First Last\\line.mb88"
