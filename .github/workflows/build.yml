@@ -192,6 +192,10 @@ jobs:
       - name: Collect logs on failure
         if: failure()
         run: |
+          # Qt run-time layout (helps diagnosing plugin loading failures)
+          Get-ChildItem build\vcpkg_installed\${{ env.VCPKG_TRIPLET }} -Directory -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in 'platforms', 'qml', 'plugins' } | ForEach-Object {
+              Write-Host "== $($_.FullName)"; Get-ChildItem $_.FullName | Select-Object -First 30 | ForEach-Object { Write-Host "   $($_.Name)" } }
           $logs = New-Item -ItemType Directory -Force "${{ github.workspace }}\ci-logs"
           Copy-Item build\vcpkg-manifest-install.log $logs -ErrorAction SilentlyContinue
           Copy-Item build\Testing\Temporary\*.log $logs -ErrorAction SilentlyContinue

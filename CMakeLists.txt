@@ -401,6 +401,9 @@ if(WIN32)
   mb_windows_finalize()
   mb_windows_install_deployment()
 endif()
+if(buildTests)
+  mb_set_all_tests_environment()
+endif()
 
 # Optional target to regenerate ChangeLog.html and ChangeLog.pdf from
 # ChangeLog.md, replacing the previously-manual MacDown export workflow.

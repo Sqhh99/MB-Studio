@@ -20,7 +20,10 @@ mb_set_test_environment(mbstudio_qmlui_test)
 
 # Run headless, with the software scene graph, against the Qt plugins and
 # QML modules of the Qt installation used for the build.
-set(_qt_env "QT_QPA_PLATFORM=offscreen" "QT_QUICK_BACKEND=software" "QT_QUICK_CONTROLS_STYLE=Material")
+# QT_FORCE_STDERR_LOGGING: on Windows Qt otherwise sends its messages to the
+# debugger when no console window is attached (as on CI), hiding failures.
+set(_qt_env "QT_QPA_PLATFORM=offscreen" "QT_QUICK_BACKEND=software" "QT_QUICK_CONTROLS_STYLE=Material"
+            "QT_FORCE_STDERR_LOGGING=1")
 if(DEFINED QT6_INSTALL_PREFIX)
   list(APPEND _qt_env
     "QT_PLUGIN_PATH=${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}"
@@ -28,3 +31,5 @@ if(DEFINED QT6_INSTALL_PREFIX)
     "QML2_IMPORT_PATH=${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}")
 endif()
 set_property(TEST mbstudio_qmlui_test APPEND PROPERTY ENVIRONMENT "${_qt_env}")
+message(STATUS "MB-Studio UI test Qt plugins: ${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}")
+message(STATUS "MB-Studio UI test QML modules: ${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}")

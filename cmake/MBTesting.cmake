@@ -75,3 +75,31 @@ function(mb_add_python_test name script)
   endif()
   mb_set_test_environment(${name})
 endfunction()
+
+# Apply the Windows run-time environment to every test registered anywhere in
+# the tree (also to tests added with a plain add_test(), such as the mbmesh
+# unit tests). Called once at the end of the top-level CMakeLists.txt.
+function(mb_set_all_tests_environment)
+  if(NOT WIN32)
+    return()
+  endif()
+  set(_dirs "${CMAKE_SOURCE_DIR}")
+  while(_dirs)
+    list(POP_FRONT _dirs _dir)
+    get_property(_tests DIRECTORY "${_dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+      # (TEST ... DIRECTORY needs CMake 3.28; this only runs on Windows)
+      get_property(_mods TEST ${_t} DIRECTORY "${_dir}" PROPERTY ENVIRONMENT_MODIFICATION)
+      if(NOT _mods)
+        set_property(TEST ${_t} DIRECTORY "${_dir}" PROPERTY ENVIRONMENT_MODIFICATION
+          "PATH=path_list_prepend:${CMAKE_BINARY_DIR}/bin")
+        foreach(_d IN LISTS MB_TEST_RUNTIME_PATH)
+          set_property(TEST ${_t} DIRECTORY "${_dir}" APPEND PROPERTY ENVIRONMENT_MODIFICATION
+            "PATH=path_list_append:${_d}")
+        endforeach()
+      endif()
+    endforeach()
+    get_property(_subdirs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    list(APPEND _dirs ${_subdirs})
+  endwhile()
+endfunction()
