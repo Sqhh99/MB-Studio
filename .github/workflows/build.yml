@@ -87,12 +87,15 @@ jobs:
           if (-not $iscc) { throw "ISCC.exe not found" }
           "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
 
+      # Restore and save explicitly: the cache must also be saved when a later
+      # step fails, so that dependencies built so far are not rebuilt.
       - name: Restore the vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.VCPKG_BINARY_CACHE }}
-          key: vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}
+          key: vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}-
             vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-
             vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-
 
@@ -104,8 +107,10 @@ jobs:
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
 
       - name: Configure (builds the vcpkg dependencies on a cache miss)
+        id: configure
         run: |
           cmake -S . -B build -G Ninja `
+            -DCMAKE_MAKE_PROGRAM="$((Get-Command ninja).Source)" `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
@@ -114,6 +119,13 @@ jobs:
             -DVCPKG_INSTALL_OPTIONS="--x-buildtrees-root=D:/b;--clean-after-build" `
             -DMBSTUDIO_VERSION="${{ steps.version.outputs.version }}" `
             -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+
+      - name: Save the vcpkg binary cache
+        if: always() && steps.configure.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.VCPKG_BINARY_CACHE }}
+          key: vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Build
         run: cmake --build build --parallel
@@ -177,16 +189,27 @@ jobs:
           path: dist/*.exe
           if-no-files-found: error
 
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          $logs = New-Item -ItemType Directory -Force "${{ github.workspace }}\ci-logs"
+          Copy-Item build\vcpkg-manifest-install.log $logs -ErrorAction SilentlyContinue
+          Copy-Item build\Testing\Temporary\*.log $logs -ErrorAction SilentlyContinue
+          if (Test-Path D:\b) {
+            Get-ChildItem D:\b -Recurse -Filter *.log | ForEach-Object {
+              $port = $_.FullName.Substring(5).Split('\')[0]
+              New-Item -ItemType Directory -Force "$logs\vcpkg\$port" | Out-Null
+              Copy-Item $_.FullName "$logs\vcpkg\$port\"
+            }
+          }
+          Copy-Item build\src\mbstudio\tests\qmlui\screenshots\*.png $logs -ErrorAction SilentlyContinue
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-windows
-          path: |
-            build/Testing/Temporary/*.log
-            build/vcpkg-manifest-install.log
-            D:/b/**/*.log
-            build/src/mbstudio/tests/qmlui/screenshots/*.png
+          path: ci-logs
           if-no-files-found: ignore
 
   linux:
@@ -209,6 +232,13 @@ jobs:
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DbuildGUIs=OFF -DbuildOpenCV=OFF -DbuildTRN=OFF
+
+      - name: Save the vcpkg binary cache
+        if: always() && steps.configure.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.VCPKG_BINARY_CACHE }}
+          key: vcpkg-${{ env.VCPKG_TRIPLET }}-gcc${{ env.GCC_VERSION }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Build
         run: cmake --build build --parallel

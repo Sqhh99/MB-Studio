@@ -16,6 +16,13 @@ vcpkg_extract_source_archive(SOURCE_PATH
     ARCHIVE "${ARCHIVE}"
 )
 
+# GMT maps stat to _stati64 on Windows but never emits HAVE__FSTATI64 into
+# gmt_config.h, so fstat() is called with a struct _stati64 - an error with
+# GCC 14+ and a struct layout mismatch. Map fstat to _fstati64 as well.
+vcpkg_replace_string("${SOURCE_PATH}/src/gmt_notposix.h"
+    "#ifdef HAVE__FSTATI64"
+    "#if defined HAVE__FSTATI64 || defined HAVE__STATI64")
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
