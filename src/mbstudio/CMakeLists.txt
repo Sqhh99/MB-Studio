@@ -47,6 +47,11 @@ add_subdirectory(plugins/mbsystem)
 
 find_package(Qt6 6.4 COMPONENTS Core Gui Qml Quick QuickControls2 Concurrent QUIET)
 if(Qt6_FOUND)
+  # Qt run-time locations, needed by the Windows deployment step at the top
+  # level (find_package results are only visible in this directory scope).
+  set(MB_QT_PLUGIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}" CACHE INTERNAL "Qt plugin directory")
+  set(MB_QT_QML_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}" CACHE INTERNAL "Qt QML module directory")
+  set(MB_QT_BIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" CACHE INTERNAL "Qt binary directory")
   add_subdirectory(plugins/qmlui)
 else()
   message(WARNING "Qt6 (Core Gui Qml Quick QuickControls2 Concurrent) not found: "

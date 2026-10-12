@@ -1,3 +1,37 @@
+# MB-Studio
+
+[![Build](https://github.com/Sqhh99/MB-Studio/actions/workflows/build.yml/badge.svg)](https://github.com/Sqhh99/MB-Studio/actions/workflows/build.yml)
+
+**MB-Studio** brings [MB-System](https://github.com/dwcaress/MB-System), the open source software for the
+processing and display of swath sonar data, to **native Windows** with a modern **Qt 6 / QML desktop
+application**. It is a fork of MB-System: all MB-System libraries and command line programs are kept and
+ported, and MB-Studio adds a graphical front end built on top of them.
+
+- **Native Windows** — built with MinGW-w64 and vcpkg, no WSL, Cygwin or Docker. The installer contains the
+  MB-System command line programs (`mbinfo`, `mbgrid`, `mbprocess`, `mbclean`, … in `bin`), `gmt`, and all
+  run-time libraries and data.
+- **Desktop application** — inspect swath files (statistics, navigation, depth profile), view bathymetry grids
+  as colour shaded relief with interactive lighting, run every MB-System program with live output, and browse
+  the supported data formats. Dark and light themes, drag and drop, Unicode paths.
+- **Microkernel architecture** — a small kernel manages plugins, services, events and commands. MB-System
+  support and the user interface are plugins, so all functionality is also available without the GUI
+  (`mbstudio --command swath.inspect path=…`). See [src/mbstudio/README.md](src/mbstudio/README.md).
+
+| | |
+|---|---|
+| Download | [Releases](https://github.com/Sqhh99/MB-Studio/releases) — `MB-Studio-<version>-windows-x64-setup.exe` (Windows 10 1809+ / 11, x64) |
+| Build on Windows | [docs/building-windows.md](docs/building-windows.md) |
+| Windows port notes | [docs/windows-port.md](docs/windows-port.md) |
+| Changes | [docs/CHANGES-MB-Studio.md](docs/CHANGES-MB-Studio.md) |
+
+Current version: **0.1.0** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
+
+MB-Studio is distributed under the same terms as MB-System (GNU GPL version 3 or later, see *COPYING.md* and
+*GPL.md*). MB-System is Copyright © 1993-2025 by David W. Caress, Dale N. Chayes, Christian dos Santos Ferreira
+and the MB-System developers; the original MB-System README follows.
+
+---
+
 --
 ### MB-System README File
 --

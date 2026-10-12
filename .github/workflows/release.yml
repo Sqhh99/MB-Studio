@@ -1,0 +1,94 @@
+# MB-Studio release: pushing a tag "v<version>" (for example v0.1.0) builds
+# and tests the Windows installer with build.yml and publishes it as a
+# GitHub release. Only the Windows version is released.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          file_version="$(head -n1 VERSION | tr -d '[:space:]')"
+          if [ "${version%%-*}" != "${file_version}" ]; then
+            echo "::error::Tag ${tag} does not match the VERSION file (${file_version})"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "${version}" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+  build:
+    name: Build and test
+    needs: check
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+
+  publish:
+    name: Publish the release
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the installer
+        uses: actions/download-artifact@v4
+        with:
+          name: MB-Studio-windows-x64
+          path: dist
+
+      - name: Checksums and release notes
+        run: |
+          cd dist
+          sha256sum *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+          version="${{ needs.check.outputs.version }}"
+          {
+            echo "## MB-Studio ${version} for Windows"
+            echo
+            echo "MB-Studio brings MB-System, the open source software for the processing and display of"
+            echo "swath sonar data, to native Windows (no WSL, Cygwin or Docker) with a Qt 6 desktop user interface."
+            echo
+            echo "### Installation"
+            echo
+            echo "1. Download \`$(ls dist/*.exe | xargs -n1 basename)\` and run it (Windows 10 1809 or newer, x64)."
+            echo "2. Start **MB-Studio** from the Start menu, or open **MB-System Command Prompt** to use the"
+            echo "   command line programs (\`mbinfo\`, \`mbgrid\`, \`mbprocess\`, ... and \`gmt\`)."
+            echo "   Optionally the installer adds the programs to \`PATH\`."
+            echo
+            echo "### Contents"
+            echo
+            echo "- MB-System $(grep -m1 'define MB_VERSION ' src/mbio/mb_define.h | cut -d'"' -f2) command line programs (in \`bin\`)"
+            echo "- MB-Studio desktop application (Qt 6 / QML)"
+            echo "- GMT, GDAL, PROJ, netCDF and the Qt run time"
+            echo
+            echo "SHA-256 checksums are in \`SHA256SUMS.txt\`."
+          } > release-notes.md
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=""
+          if [ "${{ needs.check.outputs.prerelease }}" = "true" ]; then flags="--prerelease"; fi
+          gh release create "${GITHUB_REF_NAME}" dist/*.exe dist/SHA256SUMS.txt \
+            --title "MB-Studio ${{ needs.check.outputs.version }}" \
+            --notes-file release-notes.md ${flags}

@@ -106,7 +106,8 @@ add_compile_definitions(CMAKE_BUILD_SYSTEM=1)
 
 # MB-Studio release version (the MB-System version is MB_VERSION in
 # src/mbio/mb_define.h)
-set(MBSTUDIO_VERSION "0.1.0" CACHE STRING "MB-Studio release version")
+file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" _mbstudio_version LIMIT_COUNT 1)
+set(MBSTUDIO_VERSION "${_mbstudio_version}" CACHE STRING "MB-Studio release version")
 
 # Native Windows build support (MinGW-w64 or MSVC)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -311,7 +312,11 @@ add_subdirectory(src/gmt)
 
 # Executables
 add_subdirectory(src/utilities)
-add_subdirectory(src/macros)
+# The mbm_* macros are Perl and shell scripts, which are not available on a
+# stock Windows system.
+if(NOT WIN32)
+  add_subdirectory(src/macros)
+endif()
 add_subdirectory(src/mbgrd2gltf)
 add_subdirectory(src/mbmesh)
 add_subdirectory(src/otps)
@@ -394,6 +399,7 @@ add_subdirectory(src/htmlsrc)
 
 if(WIN32)
   mb_windows_finalize()
+  mb_windows_install_deployment()
 endif()
 
 # Optional target to regenerate ChangeLog.html and ChangeLog.pdf from

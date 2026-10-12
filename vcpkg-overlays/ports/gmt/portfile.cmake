@@ -50,27 +50,22 @@ vcpkg_cmake_configure(
         -DCMAKE_DISABLE_FIND_PACKAGE_Git=ON
         -DCMAKE_DISABLE_FIND_PACKAGE_LATEX=ON
         -DCMAKE_DISABLE_FIND_PACKAGE_Sphinx=ON
-        -DCMAKE_DISABLE_FIND_PACKAGE_GSHHG=ON
-        -DCMAKE_DISABLE_FIND_PACKAGE_DCW=ON
         -DCMAKE_DISABLE_FIND_PACKAGE_GLIB=ON
         -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON
 )
 
 vcpkg_cmake_install()
 
-# Keep the gmt driver (needed to run MB-System's GMT supplement modules) as a
-# tool; the installer copies it next to the MB-System programs.
-file(GLOB _gmt_exes "${CURRENT_PACKAGES_DIR}/bin/*.exe" "${CURRENT_PACKAGES_DIR}/bin/gmt")
+# Keep the gmt driver (needed to run MB-System's GMT supplement modules) and
+# GMT's helper scripts as tools; bin/ keeps only the DLLs and gmt_plugins/.
+# The installer copies gmt.exe next to the MB-System programs.
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
-foreach(_exe IN LISTS _gmt_exes)
-    get_filename_component(_name "${_exe}" NAME)
-    file(RENAME "${_exe}" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/${_name}")
-endforeach()
-file(GLOB _gmt_scripts "${CURRENT_PACKAGES_DIR}/bin/*-config" "${CURRENT_PACKAGES_DIR}/bin/*.sh"
-                       "${CURRENT_PACKAGES_DIR}/bin/*.bat" "${CURRENT_PACKAGES_DIR}/bin/gmt_shell_functions*")
-foreach(_script IN LISTS _gmt_scripts)
-    get_filename_component(_name "${_script}" NAME)
-    file(RENAME "${_script}" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/${_name}")
+file(GLOB _gmt_bin_entries LIST_DIRECTORIES false "${CURRENT_PACKAGES_DIR}/bin/*")
+foreach(_entry IN LISTS _gmt_bin_entries)
+    if(NOT _entry MATCHES "\\.dll$")
+        get_filename_component(_name "${_entry}" NAME)
+        file(RENAME "${_entry}" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/${_name}")
+    endif()
 endforeach()
 if(NOT VCPKG_TARGET_IS_WINDOWS)
     # On non-Windows targets the shared libraries live in lib/, so bin/ is empty.
@@ -80,6 +75,8 @@ endif()
 file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/include"
     "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/debug/etc"
+    "${CURRENT_PACKAGES_DIR}/etc"
     "${CURRENT_PACKAGES_DIR}/share/doc"
 )
 

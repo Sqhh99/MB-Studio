@@ -15,3 +15,9 @@ set(VCPKG_POLICY_DLLS_WITHOUT_LIBS enabled)
 # Only release binaries are shipped; skipping the debug variants halves the
 # dependency build time on CI.
 set(VCPKG_BUILD_TYPE release)
+
+# Build C dependencies as C17: GCC 15+ defaults to C23, which some older C
+# code in the dependency tree does not compile with.
+set(VCPKG_C_FLAGS "-std=gnu17")
+# (vcpkg requires VCPKG_CXX_FLAGS whenever VCPKG_C_FLAGS is set)
+set(VCPKG_CXX_FLAGS "")
