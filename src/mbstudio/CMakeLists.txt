@@ -45,11 +45,11 @@ endfunction()
 add_subdirectory(kernel)
 add_subdirectory(plugins/mbsystem)
 
-find_package(Qt6 6.4 COMPONENTS Core Gui Qml Quick QuickControls2 Concurrent Svg QUIET)
+find_package(Qt6 6.4 COMPONENTS Core Gui Qml Quick QuickControls2 Concurrent QUIET)
 if(Qt6_FOUND)
   add_subdirectory(plugins/qmlui)
 else()
-  message(WARNING "Qt6 (Core Gui Qml Quick QuickControls2 Concurrent Svg) not found: "
+  message(WARNING "Qt6 (Core Gui Qml Quick QuickControls2 Concurrent) not found: "
                   "MB-Studio is built without its graphical user interface plugin")
 endif()
 
