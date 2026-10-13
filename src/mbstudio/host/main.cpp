@@ -77,11 +77,37 @@ void printUsage() {
       "  --list-commands          list the commands provided by plugins\n"
       "  --list-services          list the services provided by plugins\n"
       "  --command ID [k=v ...]   run a command and print its result as JSON\n"
+      "  --help-program NAME      print the help page of an MB-System program\n"
+      "  --lang CODE              language of the help page: en, ja or zh_CN\n"
+      "                           (default: MBSTUDIO_LANG or the system language)\n"
       "  --disable PLUGIN         do not start PLUGIN (repeatable)\n"
       "  --plugin-dir DIR         also load plugins from DIR (repeatable)\n"
       "  --version                print the version\n"
       "  --help                   show this help\n",
       MBSTUDIO_VERSION);
+}
+
+// Language for help pages: MBSTUDIO_LANG, then the user interface language
+// of the system ("ja", "zh_CN" or "en").
+std::string defaultLanguage() {
+  std::string lang = mbstudio::platform::getEnv("MBSTUDIO_LANG");
+#ifdef _WIN32
+  if (lang.empty()) {
+    wchar_t name[LOCALE_NAME_MAX_LENGTH] = {0};
+    if (LCIDToLocaleName(MAKELCID(GetUserDefaultUILanguage(), SORT_DEFAULT), name, LOCALE_NAME_MAX_LENGTH, 0) > 0)
+      lang = mbstudio::platform::narrow(name);
+  }
+#else
+  for (const char *var : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
+    if (lang.empty())
+      lang = mbstudio::platform::getEnv(var);
+  }
+#endif
+  if (lang.rfind("ja", 0) == 0)
+    return "ja";
+  if (lang.rfind("zh", 0) == 0)
+    return "zh_CN";
+  return "en";
 }
 
 mbstudio::Value parseValue(const std::string &text) {
@@ -106,6 +132,8 @@ int main(int argc, char **argv) {
   bool listCommands = false;
   bool listServices = false;
   std::string command;
+  std::string helpProgram;
+  std::string helpLanguage;
   mbstudio::ValueMap commandArgs;
   mbstudio::KernelConfig config;
   config.version = MBSTUDIO_VERSION;
@@ -143,6 +171,10 @@ int main(int argc, char **argv) {
         const size_t eq = kv.find('=');
         commandArgs[kv.substr(0, eq)] = parseValue(kv.substr(eq + 1));
       }
+    } else if (a == "--help-program" && i + 1 < args.size()) {
+      helpProgram = args[++i];
+    } else if (a == "--lang" && i + 1 < args.size()) {
+      helpLanguage = args[++i];
     } else if (a == "--disable" && i + 1 < args.size()) {
       config.disabledPlugins.insert(args[++i]);
     } else if (a == "--plugin-dir" && i + 1 < args.size()) {
@@ -150,6 +182,11 @@ int main(int argc, char **argv) {
     }
   }
 
+  if (!helpProgram.empty()) {
+    command = "help.show";
+    commandArgs["name"] = helpProgram;
+    commandArgs["lang"] = helpLanguage.empty() ? defaultLanguage() : helpLanguage;
+  }
   const bool commandLineMode = headless || listPlugins || listCommands || listServices || !command.empty();
 #ifdef _WIN32
   if (commandLineMode)
@@ -188,6 +225,16 @@ int main(int argc, char **argv) {
   }
   if (!command.empty()) {
     const mbstudio::CommandResult result = kernel.commands().execute(command, commandArgs);
+    if (!helpProgram.empty()) {
+      // plain Markdown for reading in the console
+      if (result.ok)
+        std::printf("%s\n", mbstudio::getString(result.data, "markdown").c_str());
+      else
+        std::fprintf(stderr, "mbstudio: %s\n", result.message.c_str());
+      std::fflush(stdout);
+      kernel.stop();
+      return result.ok ? 0 : 1;
+    }
     mbstudio::ValueMap out = result.data;
     out["ok"] = result.ok;
     if (!result.message.empty())

@@ -24,7 +24,7 @@ ported, and MB-Studio adds a graphical front end built on top of them.
 | Windows port notes | [docs/windows-port.md](docs/windows-port.md) |
 | Changes | [docs/CHANGES-MB-Studio.md](docs/CHANGES-MB-Studio.md) |
 
-Current version: **0.1.0** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
+Current version: **0.1.1** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
 
 MB-Studio is distributed under the same terms as MB-System (GNU GPL version 3 or later, see *COPYING.md* and
 *GPL.md*). MB-System is Copyright © 1993-2025 by David W. Caress, Dale N. Chayes, Christian dos Santos Ferreira

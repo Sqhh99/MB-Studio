@@ -1,11 +1,15 @@
 #include "ToolsViewModel.h"
 
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QDir>
+#include <QFileInfo>
+#include <QUrl>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include "mbstudio/platform/Paths.h"
 #include "mbstudio/platform/Process.h"
 
 namespace mbstudio::ui {
@@ -14,11 +18,13 @@ namespace {
 constexpr int kMaxOutput = 2 * 1024 * 1024;  // characters kept in the console
 }
 
-ToolsViewModel::ToolsViewModel(std::shared_ptr<IToolService> service, QObject *parent)
-    : QAbstractListModel(parent), service_(std::move(service)) {
+ToolsViewModel::ToolsViewModel(std::shared_ptr<IToolService> service, std::shared_ptr<IHelpService> help,
+                               QObject *parent)
+    : QAbstractListModel(parent), service_(std::move(service)), help_(std::move(help)) {
   if (service_)
     for (const auto &t : service_->tools())
       tools_.push_back(t);
+  summaries_.resize(tools_.size());
   workingDirectory_ = QDir::homePath();
   rebuild();
   connect(&watcher_, &QFutureWatcher<platform::ProcessResult>::finished, this, [this]() {
@@ -50,8 +56,8 @@ QVariant ToolsViewModel::data(const QModelIndex &index, int role) const {
   const ToolInfo &t = tools_[visible_[index.row()]];
   switch (role) {
     case NameRole: return QString::fromStdString(t.name);
-    case CategoryRole: return QString::fromStdString(t.category);
-    case SummaryRole: return QString::fromStdString(t.summary);
+    case CategoryRole: return categoryOf(visible_[index.row()]);
+    case SummaryRole: return summaryOf(visible_[index.row()]);
     case ExampleRole: return QString::fromStdString(t.example);
     case AvailableRole: return t.available;
     case PathRole: return QString::fromStdString(t.path);
@@ -80,7 +86,9 @@ void ToolsViewModel::rebuild() {
     const ToolInfo &t = tools_[i];
     if (needle.isEmpty() || QString::fromStdString(t.name).contains(needle, Qt::CaseInsensitive) ||
         QString::fromStdString(t.summary).contains(needle, Qt::CaseInsensitive) ||
-        QString::fromStdString(t.category).contains(needle, Qt::CaseInsensitive))
+        summaryOf(i).contains(needle, Qt::CaseInsensitive) ||
+        QString::fromStdString(t.category).contains(needle, Qt::CaseInsensitive) ||
+        categoryOf(i).contains(needle, Qt::CaseInsensitive))
       visible_.push_back(i);
   }
   endResetModel();
@@ -100,6 +108,7 @@ void ToolsViewModel::setCurrentIndex(int index) {
   if (toolIndex == current_)
     return;
   current_ = toolIndex;
+  updateHelp();
   emit currentChanged();
   emit argumentsChanged();
 }
@@ -110,8 +119,8 @@ QVariantMap ToolsViewModel::current() const {
     return out;
   const ToolInfo &t = tools_[current_];
   out[QStringLiteral("name")] = QString::fromStdString(t.name);
-  out[QStringLiteral("category")] = QString::fromStdString(t.category);
-  out[QStringLiteral("summary")] = QString::fromStdString(t.summary);
+  out[QStringLiteral("category")] = categoryOf(current_);
+  out[QStringLiteral("summary")] = summaryOf(current_);
   out[QStringLiteral("example")] = QString::fromStdString(t.example);
   out[QStringLiteral("available")] = t.available;
   out[QStringLiteral("path")] = QString::fromStdString(t.path);
@@ -123,11 +132,72 @@ bool ToolsViewModel::selectTool(const QString &name) {
     if (QString::fromStdString(tools_[i].name) == name) {
       if (current_ != i) {
         current_ = i;
+        updateHelp();
         emit currentChanged();
         emit argumentsChanged();
       }
       return true;
     }
+  }
+  return false;
+}
+
+QString ToolsViewModel::summaryOf(int tool) const {
+  if (tool >= 0 && tool < summaries_.size() && !summaries_[tool].isEmpty())
+    return summaries_[tool];
+  return QString::fromStdString(tools_[tool].summary);
+}
+
+QString ToolsViewModel::categoryOf(int tool) const {
+  // The categories are part of the program catalogue; their translations
+  // live in the "ToolCategory" context of the user interface catalogues.
+  const std::string &category = tools_[tool].category;
+  return QCoreApplication::translate("ToolCategory", category.c_str());
+}
+
+void ToolsViewModel::setLanguage(const QString &language) {
+  language_ = language.isEmpty() ? QStringLiteral("en") : language;
+  for (int i = 0; i < tools_.size(); i++) {
+    summaries_[i].clear();
+    if (help_) {
+      const HelpPage page = help_->page(tools_[i].name, language_.toStdString());
+      if (page.found)
+        summaries_[i] = QString::fromStdString(page.summary);
+    }
+  }
+  // categories and summaries changed: section headers need a model reset
+  rebuild();
+  updateHelp();
+  emit currentChanged();
+}
+
+void ToolsViewModel::updateHelp() {
+  QString text;
+  QString language;
+  if (help_ && current_ >= 0) {
+    const HelpPage page = help_->page(tools_[current_].name, language_.toStdString());
+    if (page.found) {
+      text = QString::fromStdString(page.markdown);
+      language = QString::fromStdString(page.language);
+    }
+  }
+  if (text == helpText_ && language == helpLanguage_)
+    return;
+  helpText_ = text;
+  helpLanguage_ = language;
+  emit helpChanged();
+}
+
+bool ToolsViewModel::openHelpPage() const {
+  if (current_ < 0)
+    return false;
+  const QString root =
+      QString::fromStdString(platform::joinPath(platform::installPrefix(), "share/doc/mbstudio/help"));
+  const QString name = QString::fromStdString(tools_[current_].name) + QStringLiteral(".html");
+  for (const QString &lang : {helpLanguage_, QStringLiteral("en")}) {
+    const QString file = root + QLatin1Char('/') + lang + QLatin1Char('/') + name;
+    if (!lang.isEmpty() && QFileInfo::exists(file))
+      return QDesktopServices::openUrl(QUrl::fromLocalFile(file));
   }
   return false;
 }

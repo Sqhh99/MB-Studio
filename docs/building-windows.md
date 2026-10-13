@@ -68,7 +68,7 @@ plugins are found in `build\lib\mbstudio\plugins`, the MB-System programs in
 
 ```powershell
 cmake --install build          # self-contained tree in .\stage
-iscc /DAppVersion=0.1.0 /DStageDir=$PWD\stage /DSourceDir=$PWD /DOutputDir=$PWD\dist packaging\windows\mbstudio.iss
+iscc /DAppVersion=0.1.1 /DStageDir=$PWD\stage /DSourceDir=$PWD /DOutputDir=$PWD\dist packaging\windows\mbstudio.iss
 ```
 
 `cmake --install` runs `cmake/MBWindowsDeploy.cmake`, which copies every DLL
@@ -107,3 +107,17 @@ cmake -S . -B build-win -G Ninja \
   -DCMAKE_PREFIX_PATH=/path/to/windows/dependencies \
   "-DMB_TEST_PYTHON=wine;C:/Python312/python.exe"
 ```
+
+## Translations and help pages
+
+- User interface texts are translated in the JSON catalogues
+  `src/mbstudio/plugins/qmlui/i18n/<language>.json`. After changing texts in
+  the QML or C++ sources run
+  `python src/mbstudio/plugins/qmlui/i18n/check_translations.py src/mbstudio/plugins/qmlui --update`
+  and fill in the new (empty) entries; the test `mbstudio_translations_test`
+  fails while a translation is missing.
+- Program help pages are Markdown files in `src/mbstudio/help/<language>/`.
+  Every program of the Programs page needs a page in each language; the test
+  `mbstudio_help_pages_test` (`check_help.py`) checks the page template and
+  that code blocks agree between the languages. The HTML version is generated
+  at build time by `build_html.py` (needs Python 3).

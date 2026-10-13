@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <system_error>
 
 #ifdef _WIN32
@@ -237,6 +239,18 @@ bool fileExists(const std::string &path) {
 bool isDirectory(const std::string &path) {
   std::error_code ec;
   return !path.empty() && fs::is_directory(toPath(path), ec);
+}
+
+bool readTextFile(const std::string &path, std::string &contents) {
+  std::ifstream in(toPath(path), std::ios::binary);
+  if (!in)
+    return false;
+  std::ostringstream buffer;
+  buffer << in.rdbuf();
+  contents = buffer.str();
+  if (contents.compare(0, 3, "\xEF\xBB\xBF") == 0)  // UTF-8 byte order mark
+    contents.erase(0, 3);
+  return true;
 }
 
 bool makeDirectories(const std::string &path) {

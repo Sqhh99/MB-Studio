@@ -24,6 +24,8 @@
     <file>qml/pages/InspectPage.qml</file>
     <file>qml/pages/PluginsPage.qml</file>
     <file>qml/pages/ToolsPage.qml</file>
+    <file>i18n/ja.json</file>
+    <file>i18n/zh_CN.json</file>
     <file alias="images/mbstudio.png">../../../../packaging/windows/mbstudio-256.png</file>
   </qresource>
 </RCC>

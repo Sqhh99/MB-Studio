@@ -38,6 +38,8 @@ MBSTUDIO_KERNEL_API bool isAbsolutePath(const std::string &path);
 
 MBSTUDIO_KERNEL_API bool fileExists(const std::string &path);
 MBSTUDIO_KERNEL_API bool isDirectory(const std::string &path);
+// Whole file (without a UTF-8 byte order mark); false if it cannot be read.
+MBSTUDIO_KERNEL_API bool readTextFile(const std::string &path, std::string &contents);
 MBSTUDIO_KERNEL_API bool makeDirectories(const std::string &path);
 MBSTUDIO_KERNEL_API std::vector<std::string> listDirectory(const std::string &path);
 
