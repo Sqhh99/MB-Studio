@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", ifile);
+					mb_copy_arg(ifile, optarg, 1024);
 				}
 				else if (strcmp("kluge", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &kluge);
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
 					mode = (getesf_mode_t)tmp;  // TODO(schwehr): Range check
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", sofile);
+					mb_copy_arg(sofile, optarg, 1024);
 					sofile_set = true;
 				}
 				break;
@@ -244,7 +244,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", ifile);
+				mb_copy_arg(ifile, optarg, 1024);
 				break;
 			case 'K':
 			case 'k':
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
 			}
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", sofile);
+				mb_copy_arg(sofile, optarg, 1024);
 				sofile_set = true;
 				break;
 			case '?':

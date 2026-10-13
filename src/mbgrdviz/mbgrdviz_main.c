@@ -189,12 +189,12 @@ int main(int argc, char **argv) {
 				help++;
 			}
 			else if (strcmp("grid-file", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", ifile);
+				mb_copy_arg(ifile, optarg, 1024);
 				flag++;
 				ifileflag++;
 			}
 			else if (strcmp("overlay-file", options[option_index].name) == 0) {
-				sscanf(optarg, "%1023s", jfile);
+				mb_copy_arg(jfile, optarg, 1024);
 				flag++;
 				jfileflag++;
 			}
@@ -213,13 +213,13 @@ int main(int argc, char **argv) {
 			break;
 		case 'I':
 		case 'i':
-			sscanf(optarg, "%1023s", ifile);
+			mb_copy_arg(ifile, optarg, 1024);
 			flag++;
 			ifileflag++;
 			break;
 		case 'J':
 		case 'j':
-			sscanf(optarg, "%1023s", jfile);
+			mb_copy_arg(jfile, optarg, 1024);
 			flag++;
 			jfileflag++;
 			break;

@@ -3615,7 +3615,7 @@ int main(int argc, char **argv) {
       snprintf(command, sizeof(command), "mbinfo -F %d -I %s -G -N -O -M10/10/%.9f/%.9f/%.9f/%.9f",
               oformat, ofile,
               mask_bounds[0], mask_bounds[1], mask_bounds[2], mask_bounds[3]);
-      system(command);
+      mb_system(command);
 
       /* close the synchronous attitude file */
       fclose(afp);

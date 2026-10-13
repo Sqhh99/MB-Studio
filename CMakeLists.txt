@@ -72,6 +72,7 @@ message("Disable building TRN software with -DbuildTRN=OFF")
 message("Disable building photomosaicing software with -DbuildOpenCV=OFF")
 message("Disable supporting GSF format data with -DbuildGSF=OFF")
 message("Build Qt-based GUIs with -DbuildQt=ON")
+message("Disable building the MB-Studio Qt6/QML application with -DbuildStudio=OFF")
 message("Build deprecated programs with -DbuildDeprecated=ON")
 message("Disable unit tests with -DbuildTests=OFF (run unit tests with make test)")
 message("Specify OTPS install location with -DotpsDir=directory")
@@ -103,6 +104,18 @@ endif (${srcdir} STREQUAL ${bindir})
 
 add_compile_definitions(CMAKE_BUILD_SYSTEM=1)
 
+# MB-Studio release version (the MB-System version is MB_VERSION in
+# src/mbio/mb_define.h)
+file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" _mbstudio_version LIMIT_COUNT 1)
+set(MBSTUDIO_VERSION "${_mbstudio_version}" CACHE STRING "MB-Studio release version")
+
+# Native Windows build support (MinGW-w64 or MSVC)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+if(WIN32)
+  include(MBWindows)
+  mb_windows_setup()
+endif()
+
 # Platform system libraries linked by MB-System libraries and programs.
 # libm and pthreads are separate libraries on POSIX systems and on MinGW,
 # but MSVC has the math functions built into its C runtime and has no
@@ -126,10 +139,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/build-utils")
 option(BUILD_SHARED_LIBS "Build and link with shared libraries" ON)
 
+# On Windows the X11/Motif graphical tools, the OpenCV photomosaicing tools and
+# the socket-based TRN tools are not available; MB-Studio (buildStudio) is the
+# graphical front end there.
+if(WIN32)
+  set(_mb_posix_only_default OFF)
+else()
+  set(_mb_posix_only_default ON)
+endif()
 option(buildGSF "build GSF library" ON)
-option(buildGUIs "build graphical tools" ON)
-option(buildOpenCV "build OpenCV tools" ON)
-option(buildTRN "build MBTRN tools" ON)
+option(buildGUIs "build graphical tools" ${_mb_posix_only_default})
+option(buildOpenCV "build OpenCV tools" ${_mb_posix_only_default})
+option(buildTRN "build MBTRN tools" ${_mb_posix_only_default})
+option(buildStudio "build the MB-Studio Qt6/QML desktop application" ON)
 option(buildTRNLCM "build MBTRN LCM tools" OFF)
 option(buildTrnNoRand "build with TRN_NORAND (random seed disabled)" OFF)
 option(buildPCL "build point-cloud-library tools" OFF)
@@ -255,9 +277,10 @@ set(levitusDir "share/mbsystem")
 
 include(GNUInstallDirs)
 include(CTest)
+include(MBTesting)
 
 # uninstall target
-if(NOT TARGET uninstall)
+if(NOT TARGET uninstall AND NOT WIN32)
   add_custom_target(uninstall COMMAND xargs rm -vf < install_manifest.txt)
 endif()
 
@@ -270,6 +293,9 @@ if(APPLE)
 endif()
 
 # Libraries
+if(WIN32)
+  add_subdirectory(src/win32)
+endif()
 if(buildGSF)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_GSF")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_GSF")
@@ -286,7 +312,11 @@ add_subdirectory(src/gmt)
 
 # Executables
 add_subdirectory(src/utilities)
-add_subdirectory(src/macros)
+# The mbm_* macros are Perl and shell scripts, which are not available on a
+# stock Windows system.
+if(NOT WIN32)
+  add_subdirectory(src/macros)
+endif()
 add_subdirectory(src/mbgrd2gltf)
 add_subdirectory(src/mbmesh)
 add_subdirectory(src/otps)
@@ -329,6 +359,9 @@ endif()
 if(buildDeprecated)
   add_subdirectory(src/deprecated)
 endif()
+if(buildStudio)
+  add_subdirectory(src/mbstudio)
+endif()
 
 if(buildTests)
   add_subdirectory(third_party)
@@ -353,6 +386,7 @@ if(buildTests)
   if(buildDeprecated)
     add_subdirectory(test/deprecated)
   endif()
+  add_subdirectory(test/platform)
 endif()
 
 add_subdirectory(src/man)
@@ -362,6 +396,14 @@ add_subdirectory(src/share)
 # man page HTML/PDF documentation installed from src/html; it depends on the
 # mbformat target built above in src/utilities.
 add_subdirectory(src/htmlsrc)
+
+if(WIN32)
+  mb_windows_finalize()
+  mb_windows_install_deployment()
+endif()
+if(buildTests)
+  mb_set_all_tests_environment()
+endif()
 
 # Optional target to regenerate ChangeLog.html and ChangeLog.pdf from
 # ChangeLog.md, replacing the previously-manual MacDown export workflow.

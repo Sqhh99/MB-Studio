@@ -310,7 +310,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("altitude-file", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", altitude_file);
+					mb_copy_arg(altitude_file, optarg, 1024);
 					altitude_merge = true;
 				}
 				else if (strcmp("angles-degrees", options[option_index].name) == 0) {
@@ -323,13 +323,13 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &decimate);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", file);
+					mb_copy_arg(file, optarg, 1024);
 				}
 				else if (strcmp("lonflip", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &lonflip);
 				}
 				else if (strcmp("nav-file", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", nav_file);
+					mb_copy_arg(nav_file, optarg, 1024);
 					nav_merge = true;
 				}
 				else if (strcmp("output-field", options[option_index].name) == 0) {
@@ -373,7 +373,7 @@ int main(int argc, char **argv) {
 					output_mode = (output_t)tmp;  // TODO(schwehr): Range check
 				}
 				else if (strcmp("print-format", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", printformat);
+					mb_copy_arg(printformat, optarg, 1024);
 				}
 				else if (strcmp("print-header", options[option_index].name) == 0) {
 					printheader = true;
@@ -398,7 +398,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'A':
 			case 'a':
-				sscanf(optarg, "%1023s", altitude_file);
+				mb_copy_arg(altitude_file, optarg, 1024);
 				altitude_merge = true;
 				break;
 			case 'C':
@@ -411,11 +411,11 @@ int main(int argc, char **argv) {
 				break;
 			case 'F':
 			case 'f':
-				sscanf(optarg, "%1023s", printformat);
+				mb_copy_arg(printformat, optarg, 1024);
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", file);
+				mb_copy_arg(file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':
@@ -431,7 +431,7 @@ int main(int argc, char **argv) {
 			}
 			case 'N':
 			case 'n':
-				sscanf(optarg, "%1023s", nav_file);
+				mb_copy_arg(nav_file, optarg, 1024);
 				nav_merge = true;
 				break;
 			case 'O':

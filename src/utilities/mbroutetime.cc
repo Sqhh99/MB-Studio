@@ -120,17 +120,17 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", output_file);
+					mb_copy_arg(output_file, optarg, 1024);
 					output_file_set = true;
 				}
 				else if (strcmp("range-threshold", options[option_index].name) == 0) {
 					sscanf(optarg, "%lf", &rangethreshold);
 				}
 				else if (strcmp("route-file", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", route_file);
+					mb_copy_arg(route_file, optarg, 1024);
 				}
 				break;
 			case 'H':
@@ -147,16 +147,16 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", output_file);
+				mb_copy_arg(output_file, optarg, 1024);
 				output_file_set = true;
 				break;
 			case 'R':
 			case 'r':
-				sscanf(optarg, "%1023s", route_file);
+				mb_copy_arg(route_file, optarg, 1024);
 				break;
 			case 'U':
 			case 'u':

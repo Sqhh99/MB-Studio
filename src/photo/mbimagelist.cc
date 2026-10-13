@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
 					absolutepaths = true;
 				}
 				else if (strcmp("copy", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", copydirectory);
+					mb_copy_arg(copydirectory, optarg, 1024);
 					if (strlen(copydirectory) > 0)
 						copyfiles = true;
 				}
@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
 					output_imagelist = true;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("left", options[option_index].name) == 0 ) {
 					imagechoice = MBIMAGELIST_FILECHOICE_LEFT;
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'C':
 			case 'c':
-				sscanf(optarg, "%1023s", copydirectory);
+				mb_copy_arg(copydirectory, optarg, 1024);
 				if (strlen(copydirectory) > 0)
 					copyfiles = true;
 				break;
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':

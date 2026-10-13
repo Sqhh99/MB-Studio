@@ -54,7 +54,10 @@ set_target_properties(mbaux PROPERTIES VERSION "0" SOVERSION "0")
 target_include_directories(mbaux PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mbaux GMT::GMT GDAL::GDAL mbio)
 
-install(TARGETS mbaux DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbaux
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if(buildGUIs)
@@ -63,7 +66,10 @@ if(buildGUIs)
   set_target_properties(mbxgr PROPERTIES VERSION "0" SOVERSION "0")
   target_link_libraries(mbxgr GMT::GMT GDAL::GDAL mbio ${X11_LIBRARIES})
 
-  install(TARGETS mbxgr DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(TARGETS mbxgr
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
   find_package(Motif REQUIRED)
   add_library(mbxmutil mb_xmutil.c)
@@ -71,7 +77,10 @@ if(buildGUIs)
   target_include_directories(mbxmutil PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${MOTIF_INCLUDE_DIR})
   target_link_libraries(mbxmutil ${MOTIF_LIBRARIES} ${X11_LIBRARIES} ${X11_Xt_LIB})
 
-  install(TARGETS mbxmutil DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(TARGETS mbxmutil
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
   install(FILES mb_xmutil.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
@@ -87,7 +96,10 @@ if(WIN32)
 
 	target_include_directories(mb_xdr_win32 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-	install(TARGETS mb_xdr_win32 DESTINATION ${CMAKE_INSTALL_LIBDIR})
+	install(TARGETS mb_xdr_win32
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 	install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 

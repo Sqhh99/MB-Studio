@@ -436,7 +436,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);  // MB_PATH_MAXLINE - 1
+					mb_copy_arg(read_file, optarg, 1024);  // MB_PATH_MAXLINE - 1
 				}
 				else if (strcmp("angle-bins", options[option_index].name) == 0) {
 					sscanf(optarg, "%d/%lf", &nangles, &angle_max);
@@ -454,7 +454,7 @@ int main(int argc, char **argv) {
 					skip_existing = true;
 				}
 				else if (strcmp("topography-grid", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", grid.file);  // MB_PATH_MAXLINE - 1
+					mb_copy_arg(grid.file, optarg, 1024);  // MB_PATH_MAXLINE - 1
 					corr_topogrid = true;
 				}
 				else if (strcmp("verbose", options[option_index].name) == 0) {
@@ -544,7 +544,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);  // MB_PATH_MAXLINE - 1
+				mb_copy_arg(read_file, optarg, 1024);  // MB_PATH_MAXLINE - 1
 				break;
 			case 'N':
 			case 'n':
@@ -568,7 +568,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'T':
 			case 't':
-				sscanf(optarg, "%1023s", grid.file);  // MB_PATH_MAXLINE - 1
+				mb_copy_arg(grid.file, optarg, 1024);  // MB_PATH_MAXLINE - 1
 				corr_topogrid = true;
 				break;
 			case 'V':
@@ -1691,7 +1691,7 @@ int main(int argc, char **argv) {
 				if (verbose) {
 					fprintf(stderr, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 				}
-				plot_status = system(plot_cmd);
+				plot_status = mb_system(plot_cmd);
 				if (plot_status == -1) {
 					fprintf(stderr, "\nError executing mbm_grdplot on grid file %s\n", gridfile);
 				}
@@ -1732,7 +1732,7 @@ int main(int argc, char **argv) {
 				if (verbose) {
 					fprintf(stderr, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 				}
-				plot_status = system(plot_cmd);
+				plot_status = mb_system(plot_cmd);
 				if (plot_status == -1) {
 					fprintf(stderr, "\nError executing mbm_grdplot on grid file %s\n", gridfile);
 				}

@@ -122,7 +122,7 @@ int get_segy_limits(int verbose, char *segyfile, tracemode_t *tracemode,
 			fprintf(stderr, "\nGenerating sinf file for %s\n", segyfile);
 		char command[MB_PATH_MAXLINE] = "";
 		snprintf(command, sizeof(command), "mbsegyinfo -I %s -O", segyfile);
-		/* int shellstatus = */ system(command);
+		/* int shellstatus = */ mb_system(command);
 	}
 
 	double delay0 = 0.0;
@@ -273,13 +273,13 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &nfft);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", segyfile);
+					mb_copy_arg(segyfile, optarg, 1024);
 				}
 				else if (strcmp("log-scale", options[option_index].name) == 0) {
 					logscale = true;
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", fileroot);
+					mb_copy_arg(fileroot, optarg, 1024);
 				}
 				else if (strcmp("shot-scale", options[option_index].name) == 0) {
 					const int n = sscanf(optarg, "%lf/%lf", &shotscale, &frequencyscale);
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", segyfile);
+				mb_copy_arg(segyfile, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':
@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
 			case 'G':
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", fileroot);
+				mb_copy_arg(fileroot, optarg, 1024);
 				break;
 			case 'S':
 			case 's':
@@ -877,7 +877,7 @@ int main(int argc, char **argv) {
 	if (verbose) {
 		fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 	}
-	int plot_status = system(plot_cmd);
+	int plot_status = mb_system(plot_cmd);
 	if (plot_status == -1) {
 		fprintf(outfp, "\nError executing mbm_grdplot on grid file %s\n", gridfile);
 	}
@@ -889,7 +889,7 @@ int main(int argc, char **argv) {
 	if (verbose) {
 		fprintf(outfp, "\nexecuting mbm_xyplot...\n%s\n", plot_cmd);
 	}
-	plot_status = system(plot_cmd);
+	plot_status = mb_system(plot_cmd);
 	if (plot_status == -1) {
 		fprintf(outfp, "\nError executing mbm_xyplot on psd file %s\n", psdfile);
 	}

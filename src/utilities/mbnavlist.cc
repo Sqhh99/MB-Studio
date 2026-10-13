@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &decimate);
 				}
 				else if (strcmp("delimiter", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", delimiter);
+					mb_copy_arg(delimiter, optarg, 1024);
 				}
 				else if (strcmp("end-time", options[option_index].name) == 0) {
 					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &lonflip);
@@ -250,12 +250,12 @@ int main(int argc, char **argv) {
 					}
 				}
 				else if (strcmp("projection", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", projection_pars);
+					mb_copy_arg(projection_pars, optarg, 1024);
 					use_projection = true;
 				}
 				else if (strcmp("segment", options[option_index].name) == 0) {
 					segment = true;
-					sscanf(optarg, "%1023s", segment_tag);
+					mb_copy_arg(segment_tag, optarg, 1024);
 					if (strcmp(segment_tag, "swathfile") == 0)
 						segment_mode = MBNAVLIST_SEGMENT_MODE_SWATHFILE;
 					else if (strcmp(segment_tag, "datalist") == 0)
@@ -302,15 +302,15 @@ int main(int argc, char **argv) {
 				break;
 			case 'G':
 			case 'g':
-				sscanf(optarg, "%1023s", delimiter);
+				mb_copy_arg(delimiter, optarg, 1024);
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'J':
 			case 'j':
-				sscanf(optarg, "%1023s", projection_pars);
+				mb_copy_arg(projection_pars, optarg, 1024);
 				use_projection = true;
 				break;
 			case 'K':
@@ -353,7 +353,7 @@ int main(int argc, char **argv) {
 			case 'Z':
 			case 'z':
 				segment = true;
-				sscanf(optarg, "%1023s", segment_tag);
+				mb_copy_arg(segment_tag, optarg, 1024);
 				if (strcmp(segment_tag, "swathfile") == 0)
 					segment_mode = MBNAVLIST_SEGMENT_MODE_SWATHFILE;
 				else if (strcmp(segment_tag, "datalist") == 0)

@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
           }
         }
         else if (strcmp("output-file", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", ofile);
+          mb_copy_arg(ofile, optarg, 1024);
         }
         else if (strcmp("verbose", options[option_index].name) == 0) {
           verbose++;
@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
       }
       case 'O':
       case 'o':
-        sscanf(optarg, "%1023s", ofile);
+        mb_copy_arg(ofile, optarg, 1024);
         break;
       case '?':
         errflg = true;
@@ -215,6 +215,15 @@ int main(int argc, char **argv) {
   strcat(levitusfile, "\\share\\mbsystem\\LevitusAnnual82.dat");
 #endif
 
+  /* MBSYSTEM_SHAREDIR overrides the compiled-in (or, on Windows, the
+     executable-relative) location of the MB-System data directory */
+  char levitusfile_env[MB_PATH_MAXLINE + 1] = "";
+  const char *sharedir = getenv("MBSYSTEM_SHAREDIR");
+  if (sharedir != nullptr && sharedir[0] != '\0') {
+    snprintf(levitusfile_env, sizeof(levitusfile_env), "%s/LevitusAnnual82.dat", sharedir);
+  }
+  const char *levitus_path = levitusfile_env[0] != '\0' ? levitusfile_env : levitusfile;
+
   if (verbose == 1 || help) {
     fprintf(outfp, "\nProgram %s\n", program_name);
     fprintf(outfp, "MB-system Version %s\n", MB_VERSION);
@@ -226,7 +235,7 @@ int main(int argc, char **argv) {
     fprintf(outfp, "dbg2  Control Parameters:\n");
     fprintf(outfp, "dbg2       verbose:          %d\n", verbose);
     fprintf(outfp, "dbg2       help:             %d\n", help);
-    fprintf(outfp, "dbg2       levitusfile:      %s\n", levitusfile);
+    fprintf(outfp, "dbg2       levitusfile:      %s\n", levitus_path);
     fprintf(outfp, "dbg2       ofile:            %s\n", ofile);
     fprintf(outfp, "dbg2       longitude:        %f\n", longitude);
     fprintf(outfp, "dbg2       latitude:         %f\n", latitude);
@@ -238,9 +247,9 @@ int main(int argc, char **argv) {
     exit(MB_ERROR_NO_ERROR);
   }
 
-  FILE *ifp = fopen(levitusfile, "rb");
+  FILE *ifp = fopen(levitus_path, "rb");
   if (ifp == nullptr) {
-    fprintf(stderr, "\nUnable to Open Levitus database file <%s> for reading\n", levitusfile);
+    fprintf(stderr, "\nUnable to Open Levitus database file <%s> for reading\n", levitus_path);
     fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
     exit(MB_ERROR_OPEN_FAIL);
   }

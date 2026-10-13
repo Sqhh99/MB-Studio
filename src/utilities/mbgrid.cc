@@ -643,14 +643,14 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", filelist);
+          mb_copy_arg(filelist, optarg, 1024);
         }
         else if (strcmp("projection", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", projection_pars);
+          mb_copy_arg(projection_pars, optarg, 1024);
           projection_pars_f = true;
         }
         else if (strcmp("background-data", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", backgroundfile);
+          mb_copy_arg(backgroundfile, optarg, 1024);
           if ((grdrasterid = (int)strtol(backgroundfile, NULL, 10)) <= 0)
             grdrasterid = -1;
         }
@@ -664,7 +664,7 @@ int main(int argc, char **argv) {
           use_NaN = true;
         }
         else if (strcmp("output", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", fileroot);
+          mb_copy_arg(fileroot, optarg, 1024);
         }
         else if (strcmp("pings", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &pings);
@@ -822,16 +822,16 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", filelist);
+        mb_copy_arg(filelist, optarg, 1024);
         break;
       case 'J':
       case 'j':
-        sscanf(optarg, "%1023s", projection_pars);
+        mb_copy_arg(projection_pars, optarg, 1024);
         projection_pars_f = true;
         break;
       case 'K':
       case 'k':
-        sscanf(optarg, "%1023s", backgroundfile);
+        mb_copy_arg(backgroundfile, optarg, 1024);
         if ((grdrasterid = (int)strtol(backgroundfile, NULL, 10)) <= 0)
           grdrasterid = -1;
         break;
@@ -849,7 +849,7 @@ int main(int argc, char **argv) {
         break;
       case 'O':
       case 'o':
-        sscanf(optarg, "%1023s", fileroot);
+        mb_copy_arg(fileroot, optarg, 1024);
         break;
       case 'P':
       case 'p':
@@ -1799,9 +1799,9 @@ int main(int argc, char **argv) {
       snprintf(plot_cmd, sizeof(plot_cmd), "grdraster %d -R%f/%f/%f/%f -G%s", grdrasterid, bounds[0], bounds[1], bounds[2], bounds[3],
               backgroundfile);
       fprintf(stderr, "Executing: %s\n", plot_cmd);
-      const int fork_status = system(plot_cmd);
+      const int fork_status = mb_system(plot_cmd);
       if (fork_status != 0) {
-        fprintf(outfp, "\nExecution of command:\n\t%s\nby system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
+        fprintf(outfp, "\nExecution of command:\n\t%s\nby mb_system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
                 program_name);
         mb_memory_clear(verbose, &memclear_error);
         exit(MB_ERROR_BAD_PARAMETER);
@@ -1824,9 +1824,9 @@ int main(int argc, char **argv) {
         snprintf(backgroundfileuse, sizeof(backgroundfileuse), "tmpgrdsampleT%d.grd", pid);
         snprintf(plot_cmd, sizeof(plot_cmd), "grdsample %s -G%s -T", backgroundfile, backgroundfileuse);
         fprintf(stderr, "Executing: %s\n", plot_cmd);
-        const int fork_status = system(plot_cmd);
+        const int fork_status = mb_system(plot_cmd);
         if (fork_status != 0) {
-          fprintf(outfp, "\nExecution of command:\n\t%s\nby system() call failed....\nProgram <%s> Terminated\n",
+          fprintf(outfp, "\nExecution of command:\n\t%s\nby mb_system() call failed....\nProgram <%s> Terminated\n",
                   plot_cmd, program_name);
           mb_memory_clear(verbose, &memclear_error);
           exit(MB_ERROR_BAD_PARAMETER);
@@ -1856,9 +1856,9 @@ int main(int argc, char **argv) {
       snprintf(plot_cmd, sizeof(plot_cmd), "gmt grdsample %s -Gtmpgrdsample%d.grd -R%.12f/%.12f/%.12f/%.12f -I%.12f/%.12f", backgroundfileuse,
               pid, bounds[0], bounds[1], bounds[2], bounds[3], dx, dy);
     fprintf(stderr, "Executing: %s\n", plot_cmd);
-    int fork_status = system(plot_cmd);
+    int fork_status = mb_system(plot_cmd);
     if (fork_status != 0) {
-      fprintf(outfp, "\nExecution of command:\n\t%s\nby system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
+      fprintf(outfp, "\nExecution of command:\n\t%s\nby mb_system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
               program_name);
       error = MB_ERROR_BAD_PARAMETER;
       mb_memory_clear(verbose, &memclear_error);
@@ -1951,9 +1951,9 @@ int main(int argc, char **argv) {
     /* delete any temporary files */
     snprintf(plot_cmd, sizeof(plot_cmd), "rm tmpgrd*%d.grd", pid);
     fprintf(stderr, "Executing: %s\n", plot_cmd);
-    fork_status = system(plot_cmd);
+    fork_status = mb_system(plot_cmd);
     if (fork_status != 0) {
-      fprintf(outfp, "\nExecution of command:\n\t%s\nby system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
+      fprintf(outfp, "\nExecution of command:\n\t%s\nby mb_system() call failed....\nProgram <%s> Terminated\n", plot_cmd,
               program_name);
       error = MB_ERROR_BAD_PARAMETER;
       mb_memory_clear(verbose, &memclear_error);
@@ -6140,7 +6140,7 @@ int main(int argc, char **argv) {
     if (verbose) {
       fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
     }
-    plot_status = system(plot_cmd);
+    plot_status = mb_system(plot_cmd);
     if (plot_status == -1) {
       fprintf(outfp, "\nError executing mbm_grdplot on output file %s\n", ofile);
     }
@@ -6153,7 +6153,7 @@ int main(int argc, char **argv) {
     if (verbose) {
       fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
     }
-    plot_status = system(plot_cmd);
+    plot_status = mb_system(plot_cmd);
     if (plot_status == -1) {
       fprintf(outfp, "\nError executing mbm_grdplot on output file grd_%s\n", fileroot);
     }
@@ -6165,7 +6165,7 @@ int main(int argc, char **argv) {
     if (verbose) {
       fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
     }
-    plot_status = system(plot_cmd);
+    plot_status = mb_system(plot_cmd);
     if (plot_status == -1) {
       fprintf(outfp, "\nError executing mbm_grdplot on output file grd_%s\n", fileroot);
     }

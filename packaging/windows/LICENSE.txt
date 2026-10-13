@@ -1,0 +1,21 @@
+MB-Studio
+=========
+
+MB-Studio packages MB-System, the open source software for the processing
+and display of swath sonar data, for Windows together with a desktop user
+interface.
+
+MB-System is Copyright (C) 1993-2025 by David W. Caress, Dale N. Chayes and
+Christian dos Santos Ferreira and is distributed under the GNU General Public
+License, version 3 or later. MB-Studio is distributed under the same license.
+The full copyright and licensing terms are in COPYING.md and GPL.md in the
+installation directory.
+
+The installation also contains third-party libraries, each under its own
+license: GMT (LGPL-3.0), GDAL (MIT), PROJ (MIT), netCDF (BSD-3-Clause),
+HDF5 (BSD-3-Clause), FFTW (GPL-2.0-or-later), Qt (LGPL-3.0), the GCC run time
+libraries (GPL-3.0 with the GCC Runtime Library Exception) and others.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.

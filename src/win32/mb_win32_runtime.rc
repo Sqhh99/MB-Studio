@@ -1,0 +1,3 @@
+// Embed the MB-Studio application manifest (RT_MANIFEST, resource id 1).
+#include <winuser.h>
+1 RT_MANIFEST "mb_win32.manifest"

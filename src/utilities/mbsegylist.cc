@@ -258,10 +258,10 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &decimate);
 				}
 				else if (strcmp("delimiter", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", delimiter);
+					mb_copy_arg(delimiter, optarg, 1024);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", file);
+					mb_copy_arg(file, optarg, 1024);
 				}
 				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
 					sscanf(optarg, "%d", &lonflip);
@@ -275,7 +275,7 @@ int main(int argc, char **argv) {
 				}
 				else if (strcmp("segment-tag", options[option_index].name) == 0) {
 					segment = true;
-					sscanf(optarg, "%1023s", segment_tag);
+					mb_copy_arg(segment_tag, optarg, 1024);
 				}
 				else if (strcmp("use-feet", options[option_index].name) == 0) {
 					bathy_in_feet = true;
@@ -303,11 +303,11 @@ int main(int argc, char **argv) {
 				break;
 			case 'G':
 			case 'g':
-				sscanf(optarg, "%1023s", delimiter);
+				mb_copy_arg(delimiter, optarg, 1024);
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", file);
+				mb_copy_arg(file, optarg, 1024);
 				break;
 			case 'L':
 			case 'l':
@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
 			case 'Z':
 			case 'z':
 				segment = true;
-				sscanf(optarg, "%1023s", segment_tag);
+				mb_copy_arg(segment_tag, optarg, 1024);
 				break;
 			case '?':
 				errflg = true;

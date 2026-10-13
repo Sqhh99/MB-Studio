@@ -159,13 +159,13 @@ int main(int argc, char **argv) {
 					sscanf(optarg, "%d", &format);
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", read_file);
+					mb_copy_arg(read_file, optarg, 1024);
 				}
 				else if (strcmp("setparameters", options[option_index].name) == 0) {
 					mbprocess_update = true;
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", tide_file);
+					mb_copy_arg(tide_file, optarg, 1024);
 					file_output = true;
 				}
 				else if (strcmp("offset", options[option_index].name) == 0) {
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
 					skip_existing = true;
 				}
 				else if (strcmp("geoid", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", geoidgrid);
+					mb_copy_arg(geoidgrid, optarg, 1024);
 					geoid_set = true;
 				}
 				else if (strcmp("use", options[option_index].name) == 0) {
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", read_file);
+				mb_copy_arg(read_file, optarg, 1024);
 				break;
 			case 'M':
 			case 'm':
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", tide_file);
+				mb_copy_arg(tide_file, optarg, 1024);
 				file_output = true;
 				break;
 			case 'R':
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'T':
 			case 't':
-				sscanf(optarg, "%1023s", geoidgrid);
+				mb_copy_arg(geoidgrid, optarg, 1024);
 				geoid_set = true;
 				break;
 			case 'U':

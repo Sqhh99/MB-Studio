@@ -175,11 +175,11 @@ int main(int argc, char **argv) {
           help = true;
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("output", options[option_index].name) == 0) {
           mb_path tmpstr;
-          sscanf(optarg, "%1023s", tmpstr);
+          mb_copy_arg(tmpstr, optarg, 1024);
           if (strcmp(tmpstr, "segy") == 0)
             snprintf(segy_suffix, sizeof(segy_suffix), "segy");
           else if (strcmp(tmpstr, "sgy") == 0)
@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%lf", &rangethreshold);
         }
         else if (strcmp("route", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", route_file);
+          mb_copy_arg(route_file, optarg, 1024);
           route_file_set = true;
         }
         else if (strcmp("sample-format", options[option_index].name) == 0) {
@@ -209,7 +209,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%d/%1023s", &startline, lineroot);
         }
         else if (strcmp("time-list", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", timelist_file);
+          mb_copy_arg(timelist_file, optarg, 1024);
           timelist_file_set = true;
         }
         else if (strcmp("time-shift", options[option_index].name) == 0) {
@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", read_file);
+        mb_copy_arg(read_file, optarg, 1024);
         break;
       case 'J':
       case 'j':
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
       case 'O':
       case 'o':
         mb_path tmpstr;
-        sscanf(optarg, "%1023s", tmpstr);
+        mb_copy_arg(tmpstr, optarg, 1024);
         if (strcmp(tmpstr, "segy") == 0)
           snprintf(segy_suffix, sizeof(segy_suffix), "segy");
         else if (strcmp(tmpstr, "sgy") == 0)
@@ -272,12 +272,12 @@ int main(int argc, char **argv) {
         break;
       case 'Q':
       case 'q':
-        sscanf(optarg, "%1023s", timelist_file);
+        mb_copy_arg(timelist_file, optarg, 1024);
         timelist_file_set = true;
         break;
       case 'R':
       case 'r':
-        sscanf(optarg, "%1023s", route_file);
+        mb_copy_arg(route_file, optarg, 1024);
         route_file_set = true;
         break;
       case 'S':
@@ -1517,7 +1517,7 @@ int main(int argc, char **argv) {
   /* close plotting script file */
   fclose(sfp);
   snprintf(command, sizeof(command), "chmod +x %s", scriptfile);
-  /* const int shellstatus = */ system(command);
+  /* const int shellstatus = */ mb_system(command);
   // TODO(schwehr): Check the shellstatus
 
   /* deallocate route arrays */
@@ -1571,19 +1571,19 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   if (sampleformat == MB_SEGY_SAMPLEFORMAT_ANALYTIC) {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_cor.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    int shellstatus = system(command);
+    int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_hil.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    shellstatus = system(command);
+    shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_env.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    shellstatus = system(command);
+    shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
@@ -1591,7 +1591,7 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   else if (sampleformat == MB_SEGY_SAMPLEFORMAT_ENVELOPE) {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s_env.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    const int shellstatus = system(command);
+    const int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }
@@ -1599,7 +1599,7 @@ fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, _
   else /* if (sampleformat == MB_SEGY_SAMPLEFORMAT_TRACE) */ {
     snprintf(command, sizeof(command), "mbsegyinfo -I %s.%s -O", output_root, segy_suffix);
     fprintf(stderr, "Executing: %s\n", command);
-    const int shellstatus = system(command);
+    const int shellstatus = mb_system(command);
     if (shellstatus != 0) {
       fprintf(stderr, "\nSomething went wrong executing:\n\t%s\n", command);
     }

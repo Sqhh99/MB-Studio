@@ -69,6 +69,9 @@ target_link_libraries(mbtrnframe PRIVATE m pthread)
 #------------------------------------------------------------------------------
 #
 # install it all
-install(TARGETS mbtrnframe DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbtrnframe
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 #
 #------------------------------------------------------------------------------

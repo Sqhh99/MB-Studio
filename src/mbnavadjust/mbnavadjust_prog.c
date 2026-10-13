@@ -303,7 +303,7 @@ int mbnavadjust_init(int argc, char **argv) {
         mbna_color_background = MB_COLOR_BLACK;
       }
       else if (strcmp("input", options[option_index].name) == 0) {
-        sscanf(optarg, "%1023s", ifile);
+        mb_copy_arg(ifile, optarg, 1024);
         fileflag = true;
       }
       else if (strcmp("reset-crossings", options[option_index].name) == 0) {
@@ -326,7 +326,7 @@ int mbnavadjust_init(int argc, char **argv) {
       break;
     case 'I':
     case 'i':
-      sscanf(optarg, "%1023s", ifile);
+      mb_copy_arg(ifile, optarg, 1024);
       // flag = true;
       fileflag = true;
       break;

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "mb-studio",
+  "version-semver": "0.1.0",
+  "description": "MB-Studio: native Windows distribution of MB-System with a Qt6/QML desktop GUI",
+  "homepage": "https://github.com/Sqhh99/MB-Studio",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "fftw3",
+      "default-features": false
+    },
+    {
+      "name": "gdal",
+      "default-features": false,
+      "features": [
+        "netcdf"
+      ]
+    },
+    {
+      "name": "gmt",
+      "default-features": false
+    },
+    {
+      "name": "netcdf-c",
+      "default-features": false,
+      "features": [
+        "netcdf-4"
+      ]
+    },
+    {
+      "name": "proj",
+      "default-features": false
+    }
+  ],
+  "default-features": [
+    "gui"
+  ],
+  "features": {
+    "gui": {
+      "description": "Build the MB-Studio Qt6/QML desktop application",
+      "dependencies": [
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "concurrent",
+            "freetype",
+            "gui",
+            "harfbuzz",
+            "png",
+            "testlib",
+            "thread",
+            "widgets",
+            "opengl"
+          ]
+        },
+        {
+          "name": "qtdeclarative",
+          "default-features": false
+        }
+      ]
+    }
+  },
+  "builtin-baseline": "e456309491fd875487bf02b8a0dca76c1b1b00cc"
+}

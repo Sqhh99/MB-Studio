@@ -1041,7 +1041,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				break;
 			}
 			case 1:
@@ -1088,7 +1088,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -P ");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				break;
 			}
 			case 2:
@@ -1133,7 +1133,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -P ");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 				fprintf(fresult, "%s\n", "=============================================================");
 				break;
 			}
@@ -1195,7 +1195,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 			/************calculate the nearest in position within time***************************/
 			if (p_flag == 2) {
@@ -1275,7 +1275,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 			if (p_flag == 3) {
 				// SVP nearest in time within range
@@ -1463,7 +1463,7 @@ void read_list(char *list, char *list_2) {
 				strcat(all_in_sys, " -PSVPFILE:");
 				strcat(all_in_sys, svp_hold[n].file_name);
 				printf("%s\n", all_in_sys);
-				/* int shellstatus = */ system(all_in_sys);
+				/* int shellstatus = */ mb_system(all_in_sys);
 			}
 		}
 	}
@@ -1504,7 +1504,7 @@ int main(int argc, char **argv) {
 					help = true;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", datalist);
+					mb_copy_arg(datalist, optarg, 1024);
 				}
 				else if (strcmp("method", options[option_index].name) == 0) {
 					int n1;
@@ -1564,7 +1564,7 @@ int main(int argc, char **argv) {
 					}
 				}
 				else if (strcmp("svplist", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", svplist);
+					mb_copy_arg(svplist, optarg, 1024);
 				}
 				else if (strcmp("verbose", options[option_index].name) == 0) {
 					verbose++;
@@ -1576,7 +1576,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", datalist);
+				mb_copy_arg(datalist, optarg, 1024);
 				break;
 			case 'N':
 			case 'n':
@@ -1644,7 +1644,7 @@ int main(int argc, char **argv) {
 			}
 			case 'S':
 			case 's':
-				sscanf(optarg, "%1023s", svplist);
+				mb_copy_arg(svplist, optarg, 1024);
 				break;
 			case 'V':
 			case 'v':

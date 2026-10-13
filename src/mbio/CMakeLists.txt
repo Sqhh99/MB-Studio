@@ -221,7 +221,10 @@ target_link_libraries(
   PRIVATE NetCDF::NetCDF mbbitpack mbbsio mbsapi LibPROJ::LibPROJ
   PUBLIC TIRPC::TIRPC ${MB_SYSLIBS})
 if(WIN32)
-  target_link_libraries(mbio PRIVATE mb_xdr_win32)
+  # mb_define.h includes mb_xdr_win32.h on Windows, so the XDR replacement
+  # (and its include directory) is part of mbio's public interface.
+  # Several I/O modules use the Winsock byte-order functions.
+  target_link_libraries(mbio PUBLIC mb_xdr_win32 PRIVATE ws2_32)
 endif()
 # mb_io.h marks exported data with __declspec(dllexport/dllimport) for MSVC
 # DLL builds; a static mbio library must not get those markers.
@@ -234,6 +237,9 @@ if (buildTRN)
     PRIVATE r7kr)
 endif()
 
-install(TARGETS mbio DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbio
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

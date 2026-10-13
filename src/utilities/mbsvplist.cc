@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
           sscanf(optarg, "%d", &format);
         }
         else if (strcmp("input", options[option_index].name) == 0) {
-          sscanf(optarg, "%1023s", read_file);
+          mb_copy_arg(read_file, optarg, 1024);
         }
         else if (strcmp("min-num-pairs", options[option_index].name) == 0) {
           sscanf(optarg, "%d", &min_num_pairs);
@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
         break;
       case 'I':
       case 'i':
-        sscanf(optarg, "%1023s", read_file);
+        mb_copy_arg(read_file, optarg, 1024);
         break;
       case 'M':
       case 'm':

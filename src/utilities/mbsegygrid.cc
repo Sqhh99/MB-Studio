@@ -139,7 +139,7 @@ int get_segy_limits(int verbose, char *segyfile, int *tracemode, int *tracestart
 			fprintf(stderr, "\nGenerating sinf file for %s\n", segyfile);
 		char command[MB_PATH_MAXLINE] = "";
 		snprintf(command, sizeof(command), "mbsegyinfo -I %s -O", segyfile);
-		/* int shellstatus = */ system(command);
+		/* int shellstatus = */ mb_system(command);
 	}
 
 	double delay0 = 0.0;
@@ -349,10 +349,10 @@ int main(int argc, char **argv) {
 						gainwindow = 0.0;
 				}
 				else if (strcmp("input", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", segyfile);
+					mb_copy_arg(segyfile, optarg, 1024);
 				}
 				else if (strcmp("output", options[option_index].name) == 0) {
-					sscanf(optarg, "%1023s", fileroot);
+					mb_copy_arg(fileroot, optarg, 1024);
 				}
 				else if (strcmp("distance-plot", options[option_index].name) == 0) {
 					const int n = sscanf(optarg, "%lf/%lf/%lf/%lf/%lf", &distancebin, &startlon, &endlon, &startlat, &endlat);
@@ -465,11 +465,11 @@ int main(int argc, char **argv) {
 			}
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", segyfile);
+				mb_copy_arg(segyfile, optarg, 1024);
 				break;
 			case 'O':
 			case 'o':
-				sscanf(optarg, "%1023s", fileroot);
+				mb_copy_arg(fileroot, optarg, 1024);
 				break;
 			case 'R':
 			case 'r':
@@ -1201,7 +1201,7 @@ int main(int argc, char **argv) {
 	if (verbose) {
 		fprintf(outfp, "\nexecuting mbm_grdplot...\n%s\n", plot_cmd);
 	}
-	plot_status = system(plot_cmd);
+	plot_status = mb_system(plot_cmd);
 	// TODO(schwehr): man of mbm_grdplot does not describe the return code.  Only 0 is success.
 	if (plot_status != 0) {
 		fprintf(outfp, "\nError executing mbm_grdplot on grid file %s\n", gridfile);

@@ -1,0 +1,29 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/mbstudio">
+    <file>qml/Main.qml</file>
+    <file>qml/Theme.qml</file>
+    <file>qml/Icons.qml</file>
+    <file>qml/qmldir</file>
+    <file>qml/components/qmldir</file>
+    <file>qml/components/Card.qml</file>
+    <file>qml/components/Chip.qml</file>
+    <file>qml/components/EmptyState.qml</file>
+    <file>qml/components/Icon.qml</file>
+    <file>qml/components/IconButton.qml</file>
+    <file>qml/components/NavButton.qml</file>
+    <file>qml/components/PrimaryButton.qml</file>
+    <file>qml/components/SectionTitle.qml</file>
+    <file>qml/components/StatTile.qml</file>
+    <file>qml/components/Toast.qml</file>
+    <file>qml/pages/qmldir</file>
+    <file>qml/pages/ConsolePanel.qml</file>
+    <file>qml/pages/FormatsPage.qml</file>
+    <file>qml/pages/GridPage.qml</file>
+    <file>qml/pages/HomePage.qml</file>
+    <file>qml/pages/InspectPage.qml</file>
+    <file>qml/pages/PluginsPage.qml</file>
+    <file>qml/pages/ToolsPage.qml</file>
+    <file alias="images/mbstudio.png">../../../../packaging/windows/mbstudio-256.png</file>
+  </qresource>
+</RCC>

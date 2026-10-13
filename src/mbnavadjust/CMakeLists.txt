@@ -42,7 +42,10 @@ set_target_properties(mbnavadjust_core PROPERTIES VERSION "0" SOVERSION "0")
 target_include_directories(mbnavadjust_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mbnavadjust_core PUBLIC mbaux)
 
-install(TARGETS mbnavadjust_core DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbnavadjust_core
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 add_executable(mbnavadjustmerge mbnavadjustmerge.c)

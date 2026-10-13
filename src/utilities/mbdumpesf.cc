@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'I':
 			case 'i':
-				sscanf(optarg, "%1023s", iesffile);
+				mb_copy_arg(iesffile, optarg, 1024);
 				input_specified = true;
 				break;
 			case '?':
