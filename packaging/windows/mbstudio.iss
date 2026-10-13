@@ -5,11 +5,11 @@
 ; (see cmake/MBWindowsDeploy.cmake) into a single setup program.
 ;
 ; Build with:
-;   iscc /DAppVersion=0.1.0 /DStageDir=C:\path\to\stage /DSourceDir=C:\path\to\MB-Studio
+;   iscc /DAppVersion=0.1.1 /DStageDir=C:\path\to\stage /DSourceDir=C:\path\to\MB-Studio
 ;        /DOutputDir=C:\path\to\dist packaging\windows\mbstudio.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.1.1"
 #endif
 #ifndef StageDir
   #define StageDir "..\..\stage"
@@ -60,15 +60,22 @@ VersionInfoDescription={#AppName} Setup
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "chinesesimplified"; MessagesFile: "{#SourceDir}\packaging\windows\ChineseSimplified.isl"
 
 [CustomMessages]
 english.AddToPath=Add the MB-System programs to the PATH (use them from any console)
+japanese.AddToPath=MB-System プログラムを PATH に追加する (任意のコンソールから使用可能)
 chinesesimplified.AddToPath=将 MB-System 命令行程序添加到 PATH（可在任意控制台中使用）
 english.ConsoleShortcut=MB-System Command Prompt
+japanese.ConsoleShortcut=MB-System コマンドプロンプト
 chinesesimplified.ConsoleShortcut=MB-System 命令提示符
 english.Documentation=MB-System Documentation
+japanese.Documentation=MB-System ドキュメント
 chinesesimplified.Documentation=MB-System 文档
+english.ProgramHelp=MB-System program help
+japanese.ProgramHelp=MB-System プログラム ヘルプ
+chinesesimplified.ProgramHelp=MB-System 程序帮助
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -88,6 +95,7 @@ Source: "{#SourceDir}\packaging\windows\mbstudio-cmd.bat"; DestDir: "{app}\bin";
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\bin\{#AppExe}"; WorkingDir: "{userdocs}"
 Name: "{group}\{cm:ConsoleShortcut}"; Filename: "{cmd}"; Parameters: "/k ""{app}\bin\mbstudio-cmd.bat"""; WorkingDir: "{userdocs}"; IconFilename: "{app}\bin\{#AppExe}"
+Name: "{group}\{cm:ProgramHelp}"; Filename: "{app}\share\doc\mbstudio\help\index.html"
 Name: "{group}\{cm:Documentation}"; Filename: "{app}\share\doc\mbsystem\html\mbsystem.html"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\bin\{#AppExe}"; WorkingDir: "{userdocs}"; Tasks: desktopicon

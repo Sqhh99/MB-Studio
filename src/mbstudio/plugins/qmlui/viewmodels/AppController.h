@@ -16,6 +16,7 @@ class Kernel;
 namespace mbstudio::ui {
 
 class FormatListModel;
+class JsonTranslator;
 class GridViewModel;
 class LogModel;
 class SwathViewModel;
@@ -28,6 +29,10 @@ class AppController : public QObject {
   Q_PROPERTY(QString platformName READ platformName CONSTANT)
   Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
   Q_PROPERTY(int currentPage READ currentPage WRITE setCurrentPage NOTIFY currentPageChanged)
+  // user interface language: "" follows the system, otherwise "en", "ja", "zh_CN"
+  Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+  Q_PROPERTY(QString effectiveLanguage READ effectiveLanguage NOTIFY languageChanged)
+  Q_PROPERTY(QVariantList languages READ languages CONSTANT)
   Q_PROPERTY(QStringList recentFiles READ recentFiles NOTIFY recentFilesChanged)
   Q_PROPERTY(QVariantList plugins READ plugins CONSTANT)
   Q_PROPERTY(QVariantList services READ services CONSTANT)
@@ -52,6 +57,10 @@ class AppController : public QObject {
   void setDarkTheme(bool dark);
   int currentPage() const { return currentPage_; }
   void setCurrentPage(int page);
+  QString language() const { return language_; }
+  void setLanguage(const QString &language);
+  QString effectiveLanguage() const { return effectiveLanguage_; }
+  QVariantList languages() const;
   QStringList recentFiles() const { return recentFiles_; }
   QVariantList plugins() const;
   QVariantList services() const;
@@ -77,7 +86,10 @@ class AppController : public QObject {
   Q_INVOKABLE static bool isGridFile(const QString &path);
   Q_INVOKABLE void clearRecentFiles();
   Q_INVOKABLE void showInFolder(const QString &path) const;
+  // The HTML help of the MB-System programs in the interface language
+  // (the MB-System web site if it is not installed).
   Q_INVOKABLE void openDocumentation() const;
+  Q_INVOKABLE void openWebSite() const;
   Q_INVOKABLE void copyToClipboard(const QString &text) const;
   // Run an MB-System program on a file from the inspector (switches to Tools).
   Q_INVOKABLE void runToolOn(const QString &tool, const QString &path);
@@ -85,15 +97,20 @@ class AppController : public QObject {
  signals:
   void darkThemeChanged();
   void currentPageChanged();
+  void languageChanged();
   void recentFilesChanged();
   void notify(const QString &message);
 
  private:
   void addRecent(const QString &path);
+  void applyLanguage();
   Kernel *kernel_;
   QSettings settings_;
   bool darkTheme_ = true;
   int currentPage_ = HomePage;
+  QString language_;
+  QString effectiveLanguage_ = QStringLiteral("en");
+  JsonTranslator *translator_ = nullptr;
   QStringList recentFiles_;
   FormatListModel *formats_ = nullptr;
   SwathViewModel *swath_ = nullptr;

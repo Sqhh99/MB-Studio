@@ -105,9 +105,40 @@ ApplicationWindow {
                     onClicked: App.darkTheme = !App.darkTheme
                 }
                 IconButton {
+                    id: languageButton
+                    objectName: "languageButton"
+                    Layout.alignment: Qt.AlignHCenter
+                    iconPath: Icons.translate
+                    tip: qsTr("Language")
+                    onClicked: languageMenu.popup(languageButton, languageButton.width + 4, 0)
+                    Menu {
+                        id: languageMenu
+                        MenuItem {
+                            text: qsTr("System default")
+                            checkable: true
+                            checked: App.language === ""
+                            onTriggered: App.language = ""
+                        }
+                        MenuSeparator {}
+                        Instantiator {
+                            model: App.languages
+                            delegate: MenuItem {
+                                required property var modelData
+                                text: modelData.name
+                                checkable: true
+                                checked: App.language === modelData.code
+                                onTriggered: App.language = modelData.code
+                            }
+                            // after "System default" and the separator
+                            onObjectAdded: (index, object) => languageMenu.insertItem(index + 2, object)
+                            onObjectRemoved: (index, object) => languageMenu.removeItem(object)
+                        }
+                    }
+                }
+                IconButton {
                     Layout.alignment: Qt.AlignHCenter
                     iconPath: Icons.help
-                    tip: qsTr("MB-System documentation")
+                    tip: qsTr("Program help")
                     onClicked: App.openDocumentation()
                 }
             }

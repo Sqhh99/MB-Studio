@@ -386,7 +386,7 @@ int main(int argc, char **argv) {
 		if (!sofile_set) {
 			sofp = stdout;
 		}
-		else if ((sofp = fopen(sofile, "w")) == nullptr) {
+		else if ((sofp = fopen(sofile, "wb")) == nullptr) {
 			error = MB_ERROR_OPEN_FAIL;
 			char *message = nullptr;
 			mb_error(verbose, error, &message);

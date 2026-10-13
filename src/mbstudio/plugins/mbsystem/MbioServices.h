@@ -10,6 +10,7 @@
 #include "mbstudio/api/FormatService.h"
 #include "mbstudio/api/GridService.h"
 #include "mbstudio/api/SwathService.h"
+#include "mbstudio/api/HelpService.h"
 #include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/EventBus.h"
 
@@ -73,6 +74,23 @@ class ToolService : public IToolService {
   std::vector<std::string> searchPath_;
   const EventBus *events_;
   mutable std::atomic<long> nextJob_{1};
+};
+
+// Help pages from the first of the directories that has an "en" folder:
+// MBSTUDIO_HELP_PATH entries, <prefix>/share/mbstudio/help and, for the build
+// tree, the source directory.
+class HelpService : public IHelpService {
+ public:
+  explicit HelpService(std::vector<std::string> directories = defaultDirectories());
+  std::vector<std::string> languages() const override;
+  std::vector<std::string> programs() const override;
+  HelpPage page(const std::string &program, const std::string &language) const override;
+
+  static std::vector<std::string> defaultDirectories();
+  const std::string &directory() const { return directory_; }
+
+ private:
+  std::string directory_;
 };
 
 }  // namespace mbstudio::mbsystem

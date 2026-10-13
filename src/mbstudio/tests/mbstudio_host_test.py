@@ -57,6 +57,27 @@ class HostTest(unittest.TestCase):
     self.assertEqual(0, result['exitCode'])
     self.assertIn('MBIO Data Format ID:  21', result['output'])
 
+  def testHelpProgram(self):
+    code, out, err = run('--help-program', 'mbinfo', '--lang', 'en')
+    self.assertEqual(0, code, err)
+    self.assertTrue(out.startswith('# mbinfo '), out[:200])
+    code, out, err = run('--help-program', 'mbgrid', '--lang', 'ja')
+    self.assertEqual(0, code, err)
+    self.assertIn('## 書式', out)
+    code, out, err = run('--help-program', 'mbgrid', '--lang', 'zh')
+    self.assertEqual(0, code, err)
+    self.assertIn('## 语法', out)
+    code, _, err = run('--help-program', 'no-such-program')
+    self.assertEqual(1, code)
+    self.assertIn('no-such-program', err)
+
+  def testHelpCommands(self):
+    code, out, err = run('--command', 'help.programs')
+    self.assertEqual(0, code, err)
+    result = json.loads(out)
+    self.assertEqual('en,ja,zh_CN', result['languages'])
+    self.assertIn('program.mbgrid', result)
+
   def testFailingCommand(self):
     code, out, _ = run('--command', 'swath.inspect', 'path=does-not-exist.mb21')
     self.assertEqual(1, code)

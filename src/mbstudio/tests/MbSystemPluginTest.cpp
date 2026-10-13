@@ -180,7 +180,8 @@ TEST(ToolService, CatalogIsCompleteAndInstalled) {
   for (const auto &t : list) {
     EXPECT_TRUE(names.insert(t.name).second) << "duplicate " << t.name;
     EXPECT_FALSE(t.summary.empty()) << t.name;
-    EXPECT_TRUE(t.available) << t.name << " was not found in the build tree";
+    if (t.name != "gmt")  // GMT is installed next to the programs, not built here
+      EXPECT_TRUE(t.available) << t.name << " was not found in the build tree";
   }
   EXPECT_FALSE(tools.categories().empty());
 }
@@ -229,6 +230,39 @@ TEST(ToolService, GridsSwathDataWithMbgrid) {
   EXPECT_EQ(47 * 31, static_cast<int>(render.render(g.grid, RenderOptions()).pixels.size()));
 }
 
+TEST(HelpService, EveryProgramHasPagesInAllLanguages) {
+  HelpService help(std::vector<std::string>{MBSTUDIO_HELP_DIR});
+  ASSERT_EQ(MBSTUDIO_HELP_DIR, help.directory());
+  const auto languages = help.languages();
+  ASSERT_EQ((std::vector<std::string>{"en", "ja", "zh_CN"}), languages);
+  ToolService tools(toolDirs(), nullptr);
+  for (const auto &tool : tools.tools()) {
+    for (const auto &lang : languages) {
+      const HelpPage page = help.page(tool.name, lang);
+      EXPECT_TRUE(page.found) << tool.name << " " << lang;
+      EXPECT_EQ(lang, page.language) << tool.name;
+      EXPECT_FALSE(page.summary.empty()) << tool.name << " " << lang;
+      EXPECT_EQ(0u, page.markdown.find("# " + tool.name + " ")) << tool.name << " " << lang;
+    }
+  }
+}
+
+TEST(HelpService, FallsBackToRelatedLanguagesAndEnglish) {
+  HelpService help(std::vector<std::string>{"does-not-exist", MBSTUDIO_HELP_DIR});
+  EXPECT_EQ(MBSTUDIO_HELP_DIR, help.directory());
+  EXPECT_EQ("zh_CN", help.page("mbinfo", "zh").language);
+  EXPECT_EQ("zh_CN", help.page("mbinfo", "zh_TW").language);
+  EXPECT_EQ("ja", help.page("mbinfo", "ja_JP").language);
+  EXPECT_EQ("en", help.page("mbinfo", "fr").language);
+  EXPECT_EQ("en", help.page("mbinfo", "").language);
+  EXPECT_FALSE(help.page("no-such-program", "en").found);
+  EXPECT_FALSE(help.page("../en/mbinfo", "en").found);  // no path components
+
+  HelpService none(std::vector<std::string>{"does-not-exist"});
+  EXPECT_TRUE(none.programs().empty());
+  EXPECT_FALSE(none.page("mbinfo", "en").found);
+}
+
 TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   KernelConfig config;
   config.toolDirectories = toolDirs();
@@ -248,6 +282,15 @@ TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   EXPECT_NE(std::string::npos, getString(r.data, "output").find("MBF_HSATLRAW"));
   r = kernel.commands().execute("grid.info", {{"path", writeTestGrid()}});
   EXPECT_EQ(4, getInt(r.data, "nx"));
+  ASSERT_TRUE(kernel.services().has<IHelpService>());
+  r = kernel.commands().execute("help.show", {{"name", std::string("mbgrid")}, {"lang", std::string("ja")}});
+  ASSERT_TRUE(r.ok) << r.message;
+  EXPECT_EQ("ja", getString(r.data, "language"));
+  EXPECT_EQ(0u, getString(r.data, "markdown").find("# mbgrid "));
+  r = kernel.commands().execute("help.programs");
+  EXPECT_TRUE(r.ok) << r.message;
+  EXPECT_FALSE(getString(r.data, "program.mbinfo").empty());
+  EXPECT_FALSE(kernel.commands().execute("help.show", {{"name", std::string("nothing")}}).ok);
   kernel.stop();
   EXPECT_FALSE(kernel.services().has<ISwathService>());
 }

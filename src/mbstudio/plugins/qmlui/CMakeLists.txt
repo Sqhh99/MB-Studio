@@ -20,6 +20,7 @@ add_library(mbstudio_qmlui_core OBJECT
   viewmodels/SwathViewModel.cpp
   viewmodels/ToolsViewModel.cpp
   viewmodels/TrackPlot.cpp
+  viewmodels/Translator.cpp
   qmlui.qrc)
 set_target_properties(mbstudio_qmlui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_features(mbstudio_qmlui_core PUBLIC cxx_std_17)
@@ -31,6 +32,16 @@ target_link_libraries(mbstudio_qmlui_core PUBLIC
 
 mbstudio_add_plugin(mbstudio_plugin_qmlui qmlui QmlUiPlugin.cpp)
 target_link_libraries(mbstudio_plugin_qmlui PRIVATE mbstudio_qmlui_core)
+
+# Translation catalogues must cover every qsTr()/tr() text of the sources.
+if(buildTests)
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME mbstudio_translations_test
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/i18n/check_translations.py"
+                     "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+endif()
 
 # Used by the Windows packaging step (windeployqt --qmldir).
 set(MBSTUDIO_QML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/qml" CACHE INTERNAL "MB-Studio QML sources")

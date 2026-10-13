@@ -125,7 +125,15 @@ Item {
                         Chip { text: current.category || "" }
                         Chip { visible: current.available === false; text: qsTr("not installed"); tint: Theme.danger }
                         Item { Layout.fillWidth: true }
-                        Button { text: qsTr("Help"); flat: true; enabled: current.available === true && !tools.running; onClicked: tools.showHelp() }
+                        Button {
+                            text: qsTr("Usage")
+                            flat: true
+                            enabled: current.available === true && !tools.running
+                            onClicked: tools.showHelp()
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Run the program with -h and show its usage message")
+                            ToolTip.delay: 600
+                        }
                     }
                     Text {
                         text: current.summary || ""
@@ -196,42 +204,119 @@ Item {
                 }
             }
 
-            // output console
-            Rectangle {
+            TabBar {
+                id: tabs
+                objectName: "toolTabs"
+                Layout.fillWidth: true
+                visible: current.name !== undefined
+                background: null
+                TabButton { text: qsTr("Help"); width: implicitWidth + 24 }
+                TabButton { text: qsTr("Output"); width: implicitWidth + 24 }
+            }
+            Connections {
+                target: tools
+                function onRunningChanged() { if (tools.running) tabs.currentIndex = 1 }
+                function onCurrentChanged() { if (!tools.running && tools.output === "") tabs.currentIndex = 0 }
+            }
+
+            StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: current.name !== undefined
-                radius: Theme.radius
-                color: Theme.dark ? "#0A1016" : "#1D2630"
-                border.color: Theme.border
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    spacing: 0
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 12
-                        Layout.rightMargin: 4
-                        Text { text: qsTr("Output"); color: "#8DA2B5"; font.pixelSize: Theme.fontSmall; Layout.fillWidth: true }
-                        IconButton { iconPath: Icons.copy; tip: qsTr("Copy output"); iconColor: "#8DA2B5"; onClicked: App.copyToClipboard(tools.output) }
-                        IconButton { iconPath: Icons.sweep; tip: qsTr("Clear"); iconColor: "#8DA2B5"; onClicked: tools.clearOutput() }
+                currentIndex: tabs.currentIndex
+
+                // help page of the program in the interface language
+                Rectangle {
+                    radius: Theme.radius
+                    color: Theme.surface
+                    border.color: Theme.border
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 12
+                            Layout.rightMargin: 4
+                            Text {
+                                Layout.fillWidth: true
+                                text: tools.helpText === "" ? ""
+                                      : tools.helpLanguage !== App.effectiveLanguage
+                                        ? qsTr("This page is not available in your language yet; the English page is shown.")
+                                        : qsTr("Help for %1").arg(current.name || "")
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fontSmall
+                                elide: Text.ElideRight
+                            }
+                            IconButton {
+                                iconPath: Icons.openInNew
+                                tip: qsTr("Open the help page in the web browser")
+                                visible: tools.helpText !== ""
+                                onClicked: tools.openHelpPage()
+                            }
+                        }
+                        ScrollView {
+                            id: helpScroll
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            contentWidth: availableWidth
+                            TextArea {
+                                id: helpView
+                                objectName: "helpView"
+                                text: tools.helpText !== "" ? tools.helpText
+                                      : qsTr("No help page is available for this program. Use the Usage button to show the program's own usage message.")
+                                textFormat: tools.helpText !== "" ? TextEdit.MarkdownText : TextEdit.PlainText
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                                color: Theme.text
+                                font.pixelSize: Theme.fontBody
+                                leftPadding: 16
+                                rightPadding: 16
+                                topPadding: 4
+                                bottomPadding: 16
+                                background: null
+                                onTextChanged: helpScroll.ScrollBar.vertical.position = 0
+                            }
+                        }
                     }
-                    ScrollView {
-                        id: outputScroll
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        TextArea {
-                            id: output
-                            text: tools.output
-                            readOnly: true
-                            selectByMouse: true
-                            wrapMode: TextEdit.NoWrap
-                            font.family: Theme.monoFont
-                            font.pixelSize: Theme.fontBody - 1
-                            color: "#D5E2EE"
-                            background: null
-                            onTextChanged: cursorPosition = length  // follow the output
+                }
+
+                // output console
+                Rectangle {
+                    radius: Theme.radius
+                    color: Theme.dark ? "#0A1016" : "#1D2630"
+                    border.color: Theme.border
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 12
+                            Layout.rightMargin: 4
+                            Text { text: qsTr("Output"); color: "#8DA2B5"; font.pixelSize: Theme.fontSmall; Layout.fillWidth: true }
+                            IconButton { iconPath: Icons.copy; tip: qsTr("Copy output"); iconColor: "#8DA2B5"; onClicked: App.copyToClipboard(tools.output) }
+                            IconButton { iconPath: Icons.sweep; tip: qsTr("Clear"); iconColor: "#8DA2B5"; onClicked: tools.clearOutput() }
+                        }
+                        ScrollView {
+                            id: outputScroll
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            TextArea {
+                                id: output
+                                text: tools.output
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextEdit.NoWrap
+                                font.family: Theme.monoFont
+                                font.pixelSize: Theme.fontBody - 1
+                                color: "#D5E2EE"
+                                background: null
+                                onTextChanged: cursorPosition = length  // follow the output
+                            }
                         }
                     }
                 }

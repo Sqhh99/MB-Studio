@@ -35,6 +35,7 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   auto grids = std::make_shared<GridService>();
   auto render = std::make_shared<GridRenderService>();
   auto tools = std::make_shared<ToolService>(kernel.config().toolDirectories, &kernel.events());
+  auto help = std::make_shared<HelpService>();
 
   ServiceRegistry &services = kernel.services();
   services.provide<IFormatService>(formats, owner);
@@ -42,6 +43,7 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   services.provide<IGridService>(grids, owner);
   services.provide<IGridRenderService>(render, owner);
   services.provide<IToolService>(tools, owner);
+  services.provide<IHelpService>(help, owner);
 
   CommandRegistry &commands = kernel.commands();
   commands.add({"formats.list", "List formats", "List the swath data formats supported by MB-System", owner},
@@ -128,6 +130,32 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
                  return r;
                });
 
+  commands.add({"help.programs", "Help pages", "Programs with help pages and the help languages", owner},
+               [help](const ValueMap &) {
+                 ValueMap data;
+                 std::string languages;
+                 for (const auto &l : help->languages())
+                   languages += (languages.empty() ? "" : ",") + l;
+                 data["languages"] = languages;
+                 const auto programs = help->programs();
+                 data["count"] = static_cast<std::int64_t>(programs.size());
+                 for (const auto &p : programs)
+                   data["program." + p] = help->page(p, "en").summary;
+                 return CommandResult::success(data);
+               });
+  commands.add({"help.show", "Program help", "Help page of a program (name=..., lang=en|ja|zh_CN)", owner},
+               [help](const ValueMap &args) {
+                 const HelpPage page = help->page(getString(args, "name"), getString(args, "lang", "en"));
+                 if (!page.found)
+                   return CommandResult::failure("no help page for " + getString(args, "name"));
+                 return CommandResult::success({{"program", page.program},
+                                                {"language", page.language},
+                                                {"summary", page.summary},
+                                                {"markdown", page.markdown}});
+               });
+
+  if (help->directory().empty())
+    kernel.log(LogLevel::Warning, owner, "help pages of the MB-System programs not found");
   kernel.log(LogLevel::Info, owner, std::string("MB-System ") + MB_VERSION + " services ready");
   return true;
 }

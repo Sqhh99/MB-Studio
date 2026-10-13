@@ -64,6 +64,8 @@ int QmlFrontend::run(Kernel &kernel, int argc, char **argv) {
       for (const QQmlError &w : warnings)
         kernel.log(LogLevel::Warning, "qmlui", w.toString().toStdString());
     });
+    // language switch at run time: re-evaluate every qsTr() binding
+    QObject::connect(&controller, &AppController::languageChanged, &engine, &QQmlEngine::retranslate);
     engine.addImageProvider(QStringLiteral("mbgrid"), new GridImageProvider(controller.gridModel()));
     engine.load(QUrl(QStringLiteral("qrc:/mbstudio/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) {

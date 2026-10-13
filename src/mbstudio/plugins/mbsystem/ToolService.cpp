@@ -89,6 +89,9 @@ const std::vector<ToolInfo> &ToolService::catalog() {
       entry("mbsegypsd", "SEG-Y", "Power spectral density of SEG-Y traces", "-I file.segy -O psd"),
       entry("mb7k2jstar", "SEG-Y", "Extract Edgetech sub-bottom and sidescan from Reson 7k data",
             "-I file.s7k"),
+      // Plotting with GMT and the MB-System modules (mbswath, mbcontour, mbgrdtiff)
+      entry("gmt", "Plotting", "GMT with the MB-System modules mbswath, mbcontour and mbgrdtiff",
+            "mbswath -I datalist.mb-1 -JM15c -R-122.1/-121.9/36.7/36.9 -Z2 -png swath"),
       // Export
       entry("mbswath2las", "Export", "Export swath bathymetry to LAS point clouds", "-I datalist.mb-1"),
       entry("dump_gsf", "Export", "Dump the records of a GSF file", "file.gsf"),

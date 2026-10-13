@@ -13,14 +13,32 @@ Item {
     implicitWidth: 76
     implicitHeight: 62
 
-    Rectangle {
+    // The hover and selection highlights are separate layers whose opacity
+    // is animated. Animating "color" from "transparent" (transparent black)
+    // passes through dark intermediate colours, which made the background
+    // flicker when the pointer entered or left the button.
+    Item {
+        id: pill
         anchors.horizontalCenter: parent.horizontalCenter
         y: 6
         width: 52
         height: 30
-        radius: 15
-        color: root.selected ? Theme.accentSoft : (mouse.containsMouse ? Theme.surfaceHover : "transparent")
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Rectangle {
+            objectName: "navHover"
+            anchors.fill: parent
+            radius: 15
+            color: Theme.surfaceHover
+            opacity: mouse.containsMouse && !root.selected ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+        }
+        Rectangle {
+            objectName: "navSelected"
+            anchors.fill: parent
+            radius: 15
+            color: Theme.accentSoft
+            opacity: root.selected ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+        }
         Icon {
             anchors.centerIn: parent
             path: root.iconPath

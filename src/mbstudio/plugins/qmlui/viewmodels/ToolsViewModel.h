@@ -7,6 +7,7 @@
 #include <atomic>
 #include <memory>
 
+#include "mbstudio/api/HelpService.h"
 #include "mbstudio/api/ToolService.h"
 
 namespace mbstudio::ui {
@@ -25,11 +26,15 @@ class ToolsViewModel : public QAbstractListModel {
   Q_PROPERTY(QString output READ output NOTIFY outputChanged)
   Q_PROPERTY(int exitCode READ exitCode NOTIFY runningChanged)
   Q_PROPERTY(QString lastError READ lastError NOTIFY runningChanged)
+  // help page (Markdown) of the current program in the interface language
+  Q_PROPERTY(QString helpText READ helpText NOTIFY helpChanged)
+  Q_PROPERTY(QString helpLanguage READ helpLanguage NOTIFY helpChanged)
 
  public:
   enum Roles { NameRole = Qt::UserRole + 1, CategoryRole, SummaryRole, ExampleRole, AvailableRole, PathRole };
 
-  explicit ToolsViewModel(std::shared_ptr<IToolService> service, QObject *parent = nullptr);
+  explicit ToolsViewModel(std::shared_ptr<IToolService> service, std::shared_ptr<IHelpService> help = nullptr,
+                          QObject *parent = nullptr);
   ~ToolsViewModel() override;
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -52,11 +57,17 @@ class ToolsViewModel : public QAbstractListModel {
   QString output() const { return output_; }
   int exitCode() const { return exitCode_; }
   QString lastError() const { return lastError_; }
+  QString helpText() const { return helpText_; }
+  QString helpLanguage() const { return helpLanguage_; }
+  // Language of the summaries and help pages ("en", "ja", "zh_CN").
+  void setLanguage(const QString &language);
 
   Q_INVOKABLE bool selectTool(const QString &name);
   Q_INVOKABLE void useExample();
   Q_INVOKABLE void run();
-  Q_INVOKABLE void showHelp();
+  Q_INVOKABLE void showHelp();  // runs the program with -h
+  // Opens the HTML help page of the current program; false if not installed.
+  Q_INVOKABLE bool openHelpPage() const;
   Q_INVOKABLE void stop();
   Q_INVOKABLE void clearOutput();
   Q_INVOKABLE bool waitForFinished(int timeoutMs = 60000);
@@ -69,13 +80,22 @@ class ToolsViewModel : public QAbstractListModel {
   void runningChanged();
   void outputChanged();
   void finished(int exitCode);
+  void helpChanged();
 
  private:
   void start(const QString &tool, const QStringList &arguments);
   void appendOutput(const QString &text);
   void rebuild();
+  void updateHelp();
+  QString summaryOf(int tool) const;
+  QString categoryOf(int tool) const;
   std::shared_ptr<IToolService> service_;
+  std::shared_ptr<IHelpService> help_;
   QVector<ToolInfo> tools_;
+  QVector<QString> summaries_;  // localized, from the help pages
+  QString language_ = QStringLiteral("en");
+  QString helpText_;
+  QString helpLanguage_;
   QVector<int> visible_;
   QString filter_;
   int current_ = -1;  // index into tools_

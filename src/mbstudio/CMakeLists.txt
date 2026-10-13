@@ -42,6 +42,32 @@ function(mbstudio_add_plugin target name)
           RUNTIME DESTINATION ${MBSTUDIO_PLUGIN_RELDIR})
 endfunction()
 
+# Help pages of the MB-System programs: Markdown, one folder per language
+# (help/<language>/<program>.md). They are installed for the help service and
+# turned into an HTML help (share/doc/mbstudio/help) for offline reading.
+set(MBSTUDIO_HELP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/help")
+set(MBSTUDIO_HELP_LANGUAGES en ja zh_CN)
+foreach(_lang IN LISTS MBSTUDIO_HELP_LANGUAGES)
+  install(DIRECTORY "${MBSTUDIO_HELP_DIR}/${_lang}" DESTINATION ${CMAKE_INSTALL_DATADIR}/mbstudio/help
+          FILES_MATCHING PATTERN "*.md")
+endforeach()
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  file(GLOB_RECURSE _help_pages CONFIGURE_DEPENDS "${MBSTUDIO_HELP_DIR}/*.md")
+  set(MBSTUDIO_HELP_HTML_DIR "${CMAKE_BINARY_DIR}/share/doc/mbstudio/help")
+  add_custom_command(
+    OUTPUT "${MBSTUDIO_HELP_HTML_DIR}/index.html"
+    COMMAND Python3::Interpreter "${MBSTUDIO_HELP_DIR}/build_html.py"
+            --version "${MBSTUDIO_VERSION}" "${MBSTUDIO_HELP_DIR}" "${MBSTUDIO_HELP_HTML_DIR}"
+    DEPENDS ${_help_pages} "${MBSTUDIO_HELP_DIR}/build_html.py"
+    COMMENT "Generating the HTML help of the MB-System programs"
+    VERBATIM)
+  add_custom_target(mbstudio_help_html ALL DEPENDS "${MBSTUDIO_HELP_HTML_DIR}/index.html")
+  install(DIRECTORY "${MBSTUDIO_HELP_HTML_DIR}/" DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/mbstudio/help)
+else()
+  message(WARNING "Python 3 not found: the HTML help of the MB-System programs is not generated")
+endif()
+
 add_subdirectory(kernel)
 add_subdirectory(plugins/mbsystem)
 

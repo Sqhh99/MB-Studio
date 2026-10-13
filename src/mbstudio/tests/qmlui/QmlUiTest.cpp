@@ -3,6 +3,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QSignalSpy>
 #include <QtTest>
@@ -19,6 +20,7 @@
 #include "viewmodels/LogModel.h"
 #include "viewmodels/SwathViewModel.h"
 #include "viewmodels/ToolsViewModel.h"
+#include "viewmodels/Translator.h"
 #include "viewmodels/TrackPlot.h"
 
 using namespace mbstudio;
@@ -102,6 +104,15 @@ class FakeGrids : public IGridService {
     return r;
   }
 };
+
+// Items of the scene below 'item' with the given object name (Repeater
+// delegates are not QObject children of the window, so walk the item tree).
+void findItems(QQuickItem *item, const QString &name, QList<QQuickItem *> &out) {
+  if (item->objectName() == name)
+    out << item;
+  for (auto *child : item->childItems())
+    findItems(child, name, out);
+}
 
 }  // namespace
 
@@ -249,6 +260,69 @@ class QmlUiTest : public QObject {
     QCOMPARE(model.count(), 0);
   }
 
+  void translatorUsesTheCatalogues() {
+    QCOMPARE(ui::resolveLanguage(QStringLiteral("ja")), QStringLiteral("ja"));
+    QCOMPARE(ui::resolveLanguage(QStringLiteral("ja-JP")), QStringLiteral("ja"));
+    QCOMPARE(ui::resolveLanguage(QStringLiteral("zh_TW")), QStringLiteral("zh_CN"));
+    QCOMPARE(ui::resolveLanguage(QStringLiteral("zh-Hans-CN")), QStringLiteral("zh_CN"));
+    QCOMPARE(ui::resolveLanguage(QStringLiteral("fr_FR")), QStringLiteral("en"));
+    QCOMPARE(ui::supportedLanguages().size(), 3);
+    for (const auto &l : ui::supportedLanguages()) {
+      if (l.code == QLatin1String("en"))
+        continue;
+      ui::JsonTranslator translator;
+      QVERIFY2(translator.loadLanguage(l.code), qPrintable(l.code));
+      QCOMPARE(translator.languageCode(), l.code);
+      QVERIFY(translator.size() > 100);
+      QVERIFY(!translator.translate("Main", "Home").isEmpty());
+      QVERIFY(!translator.translate("ToolCategory", "Gridding").isEmpty());
+      QVERIFY(translator.translate("Main", "no such text").isEmpty());
+    }
+    ui::JsonTranslator ja;
+    QVERIFY(ja.loadLanguage(QStringLiteral("ja")));
+    QCOMPARE(ja.translate("Main", "Home"), QStringLiteral("ホーム"));
+    QVERIFY(!ja.loadLanguage(QStringLiteral("xx")));
+    QVERIFY(ja.isEmpty());
+  }
+
+  void languageSwitchTranslatesTheModels() {
+    KernelConfig config;
+    config.toolDirectories = {MBSTUDIO_TOOL_DIR};
+    Kernel kernel(config);
+    kernel.plugins().addStatic([] { return std::make_unique<mbsystem::MbSystemPlugin>(); });
+    QCOMPARE(kernel.start(), std::size_t(1));
+    ui::AppController app(&kernel);
+    app.setLanguage(QStringLiteral("en"));
+    QCOMPARE(app.effectiveLanguage(), QStringLiteral("en"));
+    QCOMPARE(app.languages().size(), 3);
+    auto *tools = app.toolsModel();
+    QVERIFY(tools->selectTool(QStringLiteral("mbgrid")));
+    QVERIFY(tools->helpText().startsWith(QStringLiteral("# mbgrid ")));
+    QCOMPARE(tools->helpLanguage(), QStringLiteral("en"));
+
+    QSignalSpy changed(&app, &ui::AppController::languageChanged);
+    app.setLanguage(QStringLiteral("ja"));
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(app.language(), QStringLiteral("ja"));
+    QCOMPARE(app.effectiveLanguage(), QStringLiteral("ja"));
+    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("ホーム"));
+    QCOMPARE(tools->helpLanguage(), QStringLiteral("ja"));
+    QVERIFY(tools->helpText().contains(QStringLiteral("## 書式")));
+    QCOMPARE(tools->current().value(QStringLiteral("category")).toString(), QStringLiteral("グリッド作成"));
+
+    app.setLanguage(QStringLiteral("zh_CN"));
+    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("首页"));
+    QVERIFY(tools->helpText().contains(QStringLiteral("## 语法")));
+    tools->setFilter(QStringLiteral("网格"));  // localized summaries are searchable
+    QVERIFY(tools->count() >= 1);
+    tools->setFilter(QString());
+
+    app.setLanguage(QStringLiteral("system"));
+    QCOMPARE(app.language(), QString());
+    app.setLanguage(QStringLiteral("en"));
+    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("Home"));
+  }
+
   void appControllerRoutesFiles() {
     KernelConfig config;
     config.toolDirectories = {MBSTUDIO_TOOL_DIR};
@@ -288,6 +362,7 @@ class QmlUiTest : public QObject {
 
     ui::registerQmlTypes();
     ui::AppController app(&kernel);
+    app.setLanguage(QStringLiteral("en"));
     qmlRegisterSingletonInstance("MBStudio.Backend", 1, 0, "App", &app);
     QStringList warnings;
     {
@@ -338,6 +413,42 @@ class QmlUiTest : public QObject {
       QTest::qWait(150);
       window->grabWindow().save(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR "/light-theme.png"));
       app.setDarkTheme(true);
+
+      // the help tab shows the page of the selected program
+      app.setCurrentPage(ui::AppController::ToolsPage);
+      app.toolsModel()->selectTool(QStringLiteral("mbgrid"));
+      QTest::qWait(150);
+      auto *helpView = window->findChild<QObject *>(QStringLiteral("helpView"));
+      QVERIFY(helpView != nullptr);
+      QVERIFY(helpView->property("text").toString().contains(QStringLiteral("mbgrid")));
+
+      // hover and selection are separate layers that only fade their opacity,
+      // so the sidebar never blends through a dark transparent colour
+      QList<QQuickItem *> hovers;
+      findItems(window->contentItem(), QStringLiteral("navHover"), hovers);
+      QVERIFY2(hovers.size() >= 6, qPrintable(QString::number(hovers.size())));
+      for (auto *h : hovers)
+        QCOMPARE(h->property("opacity").toDouble(), 0.0);
+
+      // switch the language at run time: QML bindings are retranslated
+      QObject::connect(&app, &ui::AppController::languageChanged, &engine, &QQmlEngine::retranslate);
+      for (const QString lang : {QStringLiteral("ja"), QStringLiteral("zh_CN")}) {
+        app.setLanguage(lang);
+        QTest::qWait(200);
+        QVERIFY(helpView->property("text").toString().contains(QStringLiteral("mbgrid")));
+        for (int page = 0; page <= ui::AppController::PluginsPage; page++) {
+          app.setCurrentPage(page);
+          QTest::qWait(100);
+        }
+        app.setCurrentPage(ui::AppController::ToolsPage);
+        QList<QQuickItem *> tabs;
+        findItems(window->contentItem(), QStringLiteral("toolTabs"), tabs);
+        QCOMPARE(tabs.size(), 1);
+        tabs.first()->setProperty("currentIndex", 0);  // the help tab
+        QTest::qWait(150);
+        window->grabWindow().save(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR "/language-%1.png").arg(lang));
+      }
+      app.setLanguage(QStringLiteral("en"));
     }
     QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join(QLatin1Char('\n'))));
   }

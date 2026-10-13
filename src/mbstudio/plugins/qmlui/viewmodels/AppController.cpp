@@ -13,11 +13,14 @@
 #include "LogModel.h"
 #include "SwathViewModel.h"
 #include "ToolsViewModel.h"
+#include "Translator.h"
 #include "mbstudio/api/FormatService.h"
 #include "mbstudio/api/GridService.h"
+#include "mbstudio/api/HelpService.h"
 #include "mbstudio/api/SwathService.h"
 #include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/Kernel.h"
+#include "mbstudio/platform/Paths.h"
 
 namespace mbstudio::ui {
 
@@ -31,23 +34,26 @@ AppController::AppController(Kernel *kernel, QObject *parent)
       settings_(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("MB-Studio"), QStringLiteral("mbstudio")) {
   darkTheme_ = settings_.value(QStringLiteral("ui/darkTheme"), true).toBool();
   recentFiles_ = settings_.value(QStringLiteral("files/recent")).toStringList();
+  language_ = settings_.value(QStringLiteral("ui/language")).toString();
 
   std::shared_ptr<IFormatService> formatService;
   std::shared_ptr<ISwathService> swathService;
   std::shared_ptr<IGridService> gridService;
   std::shared_ptr<IGridRenderService> renderService;
   std::shared_ptr<IToolService> toolService;
+  std::shared_ptr<IHelpService> helpService;
   if (kernel_ != nullptr) {
     formatService = kernel_->services().get<IFormatService>();
     swathService = kernel_->services().get<ISwathService>();
     gridService = kernel_->services().get<IGridService>();
     renderService = kernel_->services().get<IGridRenderService>();
     toolService = kernel_->services().get<IToolService>();
+    helpService = kernel_->services().get<IHelpService>();
   }
   formats_ = new FormatListModel(formatService, this);
   swath_ = new SwathViewModel(swathService, this);
   grid_ = new GridViewModel(gridService, renderService, this);
-  tools_ = new ToolsViewModel(toolService, this);
+  tools_ = new ToolsViewModel(toolService, helpService, this);
   log_ = new LogModel(kernel_, this);
   tools_->setWorkingDirectory(settings_.value(QStringLiteral("tools/workingDirectory"), QDir::homePath()).toString());
   connect(tools_, &ToolsViewModel::argumentsChanged, this, [this]() {
@@ -58,6 +64,9 @@ AppController::AppController(Kernel *kernel, QObject *parent)
     if (!ok)
       emit notify(tr("Could not read %1: %2").arg(swath_->fileName(), swath_->error()));
   });
+
+  translator_ = new JsonTranslator(this);
+  applyLanguage();
 }
 
 AppController::~AppController() = default;
@@ -88,6 +97,38 @@ void AppController::setDarkTheme(bool dark) {
   darkTheme_ = dark;
   settings_.setValue(QStringLiteral("ui/darkTheme"), dark);
   emit darkThemeChanged();
+}
+
+void AppController::setLanguage(const QString &language) {
+  const QString value = language == QLatin1String("system") ? QString() : language;
+  if (value == language_)
+    return;
+  language_ = value;
+  settings_.setValue(QStringLiteral("ui/language"), language_);
+  applyLanguage();
+}
+
+QVariantList AppController::languages() const {
+  QVariantList out;
+  for (const auto &l : supportedLanguages())
+    out << QVariantMap{{QStringLiteral("code"), l.code}, {QStringLiteral("name"), l.nativeName}};
+  return out;
+}
+
+void AppController::applyLanguage() {
+  // MBSTUDIO_LANG overrides the setting (tests, screenshots, support)
+  const QString forced = qEnvironmentVariable("MBSTUDIO_LANG");
+  const QString effective = resolveLanguage(forced.isEmpty() ? language_ : forced);
+  if (QCoreApplication::instance() != nullptr) {
+    QCoreApplication::removeTranslator(translator_);
+    if (effective != QLatin1String("en") && translator_->loadLanguage(effective))
+      QCoreApplication::installTranslator(translator_);
+  }
+  effectiveLanguage_ = effective;
+  tools_->setLanguage(effective);
+  if (kernel_ != nullptr)
+    kernel_->log(LogLevel::Info, "qmlui", "user interface language: " + effective.toStdString());
+  emit languageChanged();
 }
 
 void AppController::setCurrentPage(int page) {
@@ -216,6 +257,15 @@ void AppController::showInFolder(const QString &path) const {
 }
 
 void AppController::openDocumentation() const {
+  const QString root = QString::fromStdString(platform::joinPath(platform::installPrefix(), "share/doc/mbstudio/help"));
+  const QString index = root + QLatin1Char('/') + effectiveLanguage_ + QStringLiteral("/index.html");
+  if (QFileInfo::exists(index))
+    QDesktopServices::openUrl(QUrl::fromLocalFile(index));
+  else
+    openWebSite();
+}
+
+void AppController::openWebSite() const {
   QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.mbari.org/technology/mb-system/")));
 }
 
