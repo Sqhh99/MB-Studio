@@ -9,6 +9,8 @@
 #      plugins/mbsystem/  adapter plugin turning the MBIO library, netCDF
 #                         grids and the MB-System programs into services and
 #                         commands (no Qt).
+#      plugins/project/   survey projects and the processing chain (Qt Core
+#                         for JSON only, no user interface).
 #      plugins/qmlui/     the Qt6/QML graphical user interface, itself a
 #                         plugin providing the IFrontend service.
 #      host/              mbstudio executable: starts the kernel and hands
@@ -78,10 +80,11 @@ if(Qt6_FOUND)
   set(MB_QT_PLUGIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}" CACHE INTERNAL "Qt plugin directory")
   set(MB_QT_QML_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}" CACHE INTERNAL "Qt QML module directory")
   set(MB_QT_BIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" CACHE INTERNAL "Qt binary directory")
+  add_subdirectory(plugins/project)
   add_subdirectory(plugins/qmlui)
 else()
   message(WARNING "Qt6 (Core Gui Qml Quick QuickControls2 Concurrent) not found: "
-                  "MB-Studio is built without its graphical user interface plugin")
+                  "MB-Studio is built without its project and user interface plugins")
 endif()
 
 add_subdirectory(host)
