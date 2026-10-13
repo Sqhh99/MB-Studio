@@ -632,8 +632,11 @@ class QmlUiTest : public QObject {
       // the help tab shows the page of the selected program
       app.openWorkspace(QStringLiteral("programs"));
       QTest::qWait(150);
-      auto *helpView = window->findChild<QObject *>(QStringLiteral("helpView"));
-      QVERIFY(helpView != nullptr);
+      // (documents are created by Loaders: walk the item tree)
+      QList<QQuickItem *> helpViews;
+      findItems(window->contentItem(), QStringLiteral("helpView"), helpViews);
+      QCOMPARE(helpViews.size(), 1);
+      QQuickItem *helpView = helpViews.first();
       QVERIFY(helpView->property("text").toString().contains(QStringLiteral("mbgrid")));
 
       app.openWorkspace(QStringLiteral("map"));
