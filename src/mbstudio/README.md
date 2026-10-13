@@ -35,6 +35,10 @@ graphical user interface, is a plugin.
   a string id (`T::kServiceId`), which works reliably across DLL boundaries.
 - **Commands** expose plugin functionality by name with simple key/value
   arguments and results, for scripts, tests and alternative front ends.
+- **Contributions** (`kernel/Contributions.h`) declare what a plugin adds to
+  the workbench: workspaces (document views with a QML component), menu
+  actions bound to commands, and dock panels. The front end builds its menus
+  and tabs from them, so a plugin adds a view without editing `Main.qml`.
 - **Events** (`log.*`, `job.*`, `plugin.*`) are published synchronously; the
   user interface marshals them to its own thread.
 - **Platform layer** (`include/mbstudio/platform`): UTF-8 paths (UTF-16 at
@@ -49,12 +53,30 @@ graphical user interface, is a plugin.
   rendering, and the catalogue of MB-System programs, which it runs through the
   platform process runner. Commands: `formats.list`, `formats.identify`,
   `swath.inspect`, `grid.info`, `tools.list`, `tools.run`.
+  It also provides the **job service** (`IJobService`: a queue of jobs made
+  of program runs with structured argument lists and in-process steps, run on
+  worker threads with cancel, retry, a log per job and `job.*` events) and the
+  **processing service** (`IProcessingService`: typed recipes that map user
+  parameters explicitly to the options of `mbpreprocess`, `mbclean`,
+  `mbareaclean`, `mbset`, `mbprocess`, `mbgrid`, `mbmosaic` and the export
+  programs). Commands also include `grid.stats`, `processing.grid`,
+  `jobs.list`, `jobs.cancel`.
+- **project** (Qt Core for JSON only) provides `IProjectService`: the project
+  file, survey lines with their metadata, products, layers, the open views
+  and the processing history with provenance. It writes the datalists,
+  turns processing requests on a selection of lines into jobs and registers
+  their products. Commands: `project.create`, `project.open`, `project.add`,
+  `project.grid`, `project.info`.
 - **qmlui** provides the `IFrontend` service. It is layered:
   - `viewmodels/` – C++ adapters between the kernel services and QML
-    (`AppController`, `SwathViewModel`, `GridViewModel` + image provider,
-    `ToolsViewModel`, `FormatListModel`, `LogModel`, `TrackPlot`). Long
-    running work runs on worker threads.
-  - `qml/` – presentation only: pages, components, theme and icons.
+    (`AppController`, `ProjectViewModel`, `ProcessingViewModel` with the
+    declarative parameter schemas of the processing panels, `JobListModel`,
+    `WorkspaceModel`, `MapView`, `SwathViewModel`, `GridViewModel` + image
+    provider, `ToolsViewModel`, `FormatListModel`, `LogModel`, `TrackPlot`).
+    Long running work runs on worker threads.
+  - `qml/` – presentation only: the workbench shell (`Main.qml`), dock
+    panels (`panels/`), workspaces (`workspaces/`), pages, components, theme
+    and icons.
 
 ## Command line
 
@@ -64,6 +86,9 @@ mbstudio --list-plugins               plugins and their state
 mbstudio --list-services --list-commands
 mbstudio --command swath.inspect path=line.mb88
 mbstudio --command tools.run tool=mbinfo args="-I datalist.mb-1"
+mbstudio --command project.create dir=D:\Surveys\EM122 name=EM122
+mbstudio --command project.add project=D:\Surveys\EM122 path=D:\Data\EM122
+mbstudio --command project.grid project=D:\Surveys\EM122 spacing=25
 ```
 
 ## Writing a plugin
@@ -94,7 +119,10 @@ Build it with `mbstudio_add_plugin(<target> hello hello.cpp)` (see
   libraries, ABI and dependency handling, quoting, Unicode, processes).
 - `mbstudio_mbsystem_test` – the MB-System services against real data and
   programs (including an `mbgrid` run).
+- `mbstudio_project_test` – projects in folders with spaces and Chinese
+  characters: import, metadata, gridding through the job service,
+  persistence and the project commands.
 - `mbstudio_host_test` – the `mbstudio` executable in its command line modes.
 - `mbstudio_qmlui_test` – view models with fake and real services, and an
   offscreen smoke test of the complete QML interface that fails on any QML
-  warning and saves screenshots of every page.
+  warning and saves screenshots of every workspace and panel.

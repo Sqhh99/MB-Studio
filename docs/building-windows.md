@@ -68,7 +68,7 @@ plugins are found in `build\lib\mbstudio\plugins`, the MB-System programs in
 
 ```powershell
 cmake --install build          # self-contained tree in .\stage
-iscc /DAppVersion=0.1.1 /DStageDir=$PWD\stage /DSourceDir=$PWD /DOutputDir=$PWD\dist packaging\windows\mbstudio.iss
+iscc /DAppVersion=0.2.0 /DStageDir=$PWD\stage /DSourceDir=$PWD /DOutputDir=$PWD\dist packaging\windows\mbstudio.iss
 ```
 
 `cmake --install` runs `cmake/MBWindowsDeploy.cmake`, which copies every DLL

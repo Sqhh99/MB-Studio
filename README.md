@@ -10,9 +10,16 @@ ported, and MB-Studio adds a graphical front end built on top of them.
 - **Native Windows** — built with MinGW-w64 and vcpkg, no WSL, Cygwin or Docker. The installer contains the
   MB-System command line programs (`mbinfo`, `mbgrid`, `mbprocess`, `mbclean`, … in `bin`), `gmt`, and all
   run-time libraries and data.
+- **Project workbench** — create a project, drop in a folder of survey lines in any MB-System format and
+  take them from raw data to a terrain model without writing a datalist or a command: preprocess, clean,
+  corrections, process, grid, mosaic and export are panels with typed parameters that show the exact
+  commands, run as background jobs and add their products to the project. A map shows the survey tracks
+  and grid layers; the grid view shows coverage, data counts, standard deviation and interpolated cells.
+  Every job is recorded with its commands and log. See [docs/workflow.md](docs/workflow.md).
 - **Desktop application** — inspect swath files (statistics, navigation, depth profile), view bathymetry grids
   as colour shaded relief with interactive lighting, run every MB-System program with live output, and browse
-  the supported data formats. Dark and light themes, drag and drop, Unicode paths.
+  the supported data formats. Dark and light themes, drag and drop, Unicode paths, English, Japanese and
+  Simplified Chinese.
 - **Microkernel architecture** — a small kernel manages plugins, services, events and commands. MB-System
   support and the user interface are plugins, so all functionality is also available without the GUI
   (`mbstudio --command swath.inspect path=…`). See [src/mbstudio/README.md](src/mbstudio/README.md).
@@ -22,9 +29,10 @@ ported, and MB-Studio adds a graphical front end built on top of them.
 | Download | [Releases](https://github.com/Sqhh99/MB-Studio/releases) — `MB-Studio-<version>-windows-x64-setup.exe` (Windows 10 1809+ / 11, x64) |
 | Build on Windows | [docs/building-windows.md](docs/building-windows.md) |
 | Windows port notes | [docs/windows-port.md](docs/windows-port.md) |
+| Processing a survey | [docs/workflow.md](docs/workflow.md) |
 | Changes | [docs/CHANGES-MB-Studio.md](docs/CHANGES-MB-Studio.md) |
 
-Current version: **0.1.1** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
+Current version: **0.2.0** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
 
 MB-Studio is distributed under the same terms as MB-System (GNU GPL version 3 or later, see *COPYING.md* and
 *GPL.md*). MB-System is Copyright © 1993-2025 by David W. Caress, Dale N. Chayes, Christian dos Santos Ferreira
