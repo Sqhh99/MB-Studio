@@ -21,6 +21,7 @@ struct CommandInfo {
   std::string title;
   std::string description;
   std::string owner;  // id of the plugin that registered the command
+  std::string category;  // grouping for menus and the command palette (optional)
 };
 
 struct MBSTUDIO_KERNEL_API CommandResult {

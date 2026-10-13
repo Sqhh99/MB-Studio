@@ -4,7 +4,12 @@ SectionTitle 1.0 SectionTitle.qml
 StatTile 1.0 StatTile.qml
 Chip 1.0 Chip.qml
 IconButton 1.0 IconButton.qml
-NavButton 1.0 NavButton.qml
 EmptyState 1.0 EmptyState.qml
 Toast 1.0 Toast.qml
 PrimaryButton 1.0 PrimaryButton.qml
+PanelHeader 1.0 PanelHeader.qml
+PropertyRow 1.0 PropertyRow.qml
+CommandPreview 1.0 CommandPreview.qml
+ParamField 1.0 ParamField.qml
+JobRow 1.0 JobRow.qml
+WorkflowGuide 1.0 WorkflowGuide.qml

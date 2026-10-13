@@ -170,10 +170,26 @@ jobs:
           Write-Host $plugins
           if ($plugins -notmatch 'mbsystem\s+active') { throw "mbsystem plugin not active" }
           if ($plugins -notmatch 'qmlui\s+active') { throw "qmlui plugin not active" }
+          if ($plugins -notmatch 'project\s+active') { throw "project plugin not active" }
           $info = & "$bin\mbinfo.exe" "-I$data" | Out-String
           if ($info -notmatch 'MBIO Data Format ID:\s+21') { throw "mbinfo failed: $info" }
           $json = & "$bin\mbstudio.exe" --command swath.inspect "path=$data" | ConvertFrom-Json
           if (-not $json.ok -or $json.records -ne 2) { throw "swath.inspect failed" }
+          # A survey project from the command line: import and gridding as background jobs
+          $proj = "$env:RUNNER_TEMP\smoke project\survey"
+          $json = & "$bin\mbstudio.exe" --command project.create "dir=$proj" name=smoke | ConvertFrom-Json
+          if (-not $json.ok) { throw "project.create failed" }
+          New-Item -ItemType Directory -Force "$proj\raw" | Out-Null
+          Copy-Item $data "$proj\raw\"
+          $out = & "$bin\mbstudio.exe" --command project.add "project=$proj" "path=$proj\raw" | Out-String
+          Write-Host $out
+          $json = $out | ConvertFrom-Json
+          if (-not $json.ok -or $json.added -ne 1 -or $json.inspected -ne 1) { throw "project.add failed" }
+          $out = & "$bin\mbstudio.exe" --command project.grid "project=$proj" spacing=20 name=bathy | Out-String
+          Write-Host $out
+          $json = $out | ConvertFrom-Json
+          if (-not $json.ok -or $json.state -ne "completed") { throw "project.grid failed" }
+          if (-not (Test-Path "$proj\products\grids\bathy.grd")) { throw "the project grid was not written" }
           # Help pages: Markdown for the application, HTML for the browser
           $help = & "$bin\mbstudio.exe" --help-program mbgrid --lang en | Out-String
           if ($help -notmatch '## Synopsis') { throw "mbstudio --help-program failed: $help" }

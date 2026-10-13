@@ -19,7 +19,7 @@
 namespace mbstudio {
 
 // Incremented whenever the kernel interfaces change incompatibly.
-constexpr int kPluginAbiVersion = 1;
+constexpr int kPluginAbiVersion = 2;  // 2: contribution registry, command categories
 
 class Kernel;
 

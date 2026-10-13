@@ -94,7 +94,7 @@ Item {
                         onClicked: {
                             if (App.tools.selectTool("mbformat")) {
                                 App.tools.arguments = "-F" + formatId
-                                App.currentPage = AppController.ToolsPage
+                                App.openWorkspace("programs")
                                 App.tools.run()
                             }
                         }

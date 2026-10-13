@@ -11,17 +11,23 @@
 
 #include "MbSystemPlugin.h"
 #include "MbioServices.h"
+#include "ProjectPlugin.h"
 #include "QmlFrontend.h"
 #include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/Kernel.h"
 #include "viewmodels/AppController.h"
 #include "viewmodels/FormatListModel.h"
 #include "viewmodels/GridViewModel.h"
+#include "viewmodels/JobListModel.h"
 #include "viewmodels/LogModel.h"
+#include "viewmodels/MapView.h"
+#include "viewmodels/ProcessingViewModel.h"
+#include "viewmodels/ProjectViewModel.h"
 #include "viewmodels/SwathViewModel.h"
 #include "viewmodels/ToolsViewModel.h"
 #include "viewmodels/Translator.h"
 #include "viewmodels/TrackPlot.h"
+#include "viewmodels/WorkspaceModel.h"
 
 using namespace mbstudio;
 
@@ -29,6 +35,18 @@ namespace {
 
 QString testData() {
   return QStringLiteral(MBSTUDIO_SOURCE_DIR) + QStringLiteral("/test/utilities/testdata/mb21/TN136HS.309.snipped.mb21");
+}
+
+// a new, empty folder below the screenshot directory for each run
+QString freshFolder(const QString &name) {
+  const QString base = QStringLiteral(MBSTUDIO_SCREENSHOT_DIR) + QStringLiteral("/projects/") + name;
+  QString dir;
+  int n = 0;
+  do
+    dir = base + QStringLiteral("/run-%1").arg(++n);
+  while (QFileInfo::exists(dir));
+  QDir().mkpath(dir);
+  return dir;
 }
 
 class FakeFormats : public IFormatService {
@@ -102,6 +120,15 @@ class FakeGrids : public IGridService {
     g.zmax = -265;
     r.ok = true;
     return r;
+  }
+  GridStatistics statistics(const Grid &grid) const override {
+    GridStatistics st;
+    st.nodes = static_cast<long long>(grid.z.size());
+    for (const float z : grid.z)
+      st.valid += std::isnan(z) ? 0 : 1;
+    st.empty = st.nodes - st.valid;
+    st.emptyRatio = st.nodes > 0 ? double(st.empty) / double(st.nodes) : 0.0;
+    return st;
   }
 };
 
@@ -274,13 +301,14 @@ class QmlUiTest : public QObject {
       QVERIFY2(translator.loadLanguage(l.code), qPrintable(l.code));
       QCOMPARE(translator.languageCode(), l.code);
       QVERIFY(translator.size() > 100);
-      QVERIFY(!translator.translate("Main", "Home").isEmpty());
+      QVERIFY(!translator.translate("Main", "Log").isEmpty());
+      QVERIFY(!translator.translate("Contribution", "Grid bathymetry…").isEmpty());
       QVERIFY(!translator.translate("ToolCategory", "Gridding").isEmpty());
       QVERIFY(translator.translate("Main", "no such text").isEmpty());
     }
     ui::JsonTranslator ja;
     QVERIFY(ja.loadLanguage(QStringLiteral("ja")));
-    QCOMPARE(ja.translate("Main", "Home"), QStringLiteral("ホーム"));
+    QCOMPARE(ja.translate("Main", "Log"), QStringLiteral("ログ"));
     QVERIFY(!ja.loadLanguage(QStringLiteral("xx")));
     QVERIFY(ja.isEmpty());
   }
@@ -305,13 +333,13 @@ class QmlUiTest : public QObject {
     QCOMPARE(changed.count(), 1);
     QCOMPARE(app.language(), QStringLiteral("ja"));
     QCOMPARE(app.effectiveLanguage(), QStringLiteral("ja"));
-    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("ホーム"));
+    QCOMPARE(QCoreApplication::translate("Main", "Log"), QStringLiteral("ログ"));
     QCOMPARE(tools->helpLanguage(), QStringLiteral("ja"));
     QVERIFY(tools->helpText().contains(QStringLiteral("## 書式")));
     QCOMPARE(tools->current().value(QStringLiteral("category")).toString(), QStringLiteral("グリッド作成"));
 
     app.setLanguage(QStringLiteral("zh_CN"));
-    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("首页"));
+    QCOMPARE(QCoreApplication::translate("Main", "Log"), QStringLiteral("日志"));
     QVERIFY(tools->helpText().contains(QStringLiteral("## 语法")));
     tools->setFilter(QStringLiteral("网格"));  // localized summaries are searchable
     QVERIFY(tools->count() >= 1);
@@ -320,7 +348,142 @@ class QmlUiTest : public QObject {
     app.setLanguage(QStringLiteral("system"));
     QCOMPARE(app.language(), QString());
     app.setLanguage(QStringLiteral("en"));
-    QCOMPARE(QCoreApplication::translate("Main", "Home"), QStringLiteral("Home"));
+    QCOMPARE(QCoreApplication::translate("Main", "Log"), QStringLiteral("Log"));
+  }
+
+  void workspacesComeFromContributions() {
+    Kernel kernel;
+    std::string error;
+    QVERIFY2(ui::registerContributions(kernel, error), error.c_str());
+    // a plugin's workspace appears without any change to the shell
+    WorkspaceContribution extra;
+    extra.id = "test.extra";
+    extra.title = "Extra";
+    extra.qmlUrl = "qrc:/test/Extra.qml";
+    extra.owner = "test";
+    extra.singleton = false;
+    QVERIFY(kernel.contributions().addWorkspace(extra, &error));
+    ui::WorkspaceModel model(&kernel);
+    QCOMPARE(model.available().size(), 9);
+    QCOMPARE(model.open(QStringLiteral("nothing")), -1);
+    QCOMPARE(model.open(QStringLiteral("start")), 0);
+    QCOMPARE(model.open(QStringLiteral("map")), 1);
+    QCOMPARE(model.open(QStringLiteral("start")), 0);  // singleton: activated again
+    QCOMPARE(model.count(), 2);
+    QCOMPARE(model.open(QStringLiteral("grid"), QStringLiteral("/data/a.grd"), QStringLiteral("Grid: a.grd")), 2);
+    QCOMPARE(model.open(QStringLiteral("grid"), QStringLiteral("/data/b.grd"), QStringLiteral("Grid: b.grd")), 2);
+    QCOMPARE(model.argument(2), QStringLiteral("/data/b.grd"));
+    QCOMPARE(model.open(QStringLiteral("test.extra"), QStringLiteral("1")), 3);
+    QCOMPARE(model.open(QStringLiteral("test.extra"), QStringLiteral("2")), 4);  // not a singleton
+    QCOMPARE(model.currentWorkspace(), QStringLiteral("test.extra"));
+    const QString state = model.saveState();
+    model.close(1);  // the map cannot be closed
+    QCOMPARE(model.count(), 5);
+    model.close(4);
+    QCOMPARE(model.count(), 4);
+    QCOMPARE(model.currentIndex(), 3);
+    ui::WorkspaceModel restored(&kernel);
+    restored.restoreState(state);
+    QCOMPARE(restored.count(), 5);
+    QCOMPARE(restored.currentIndex(), 4);
+    QCOMPARE(restored.argument(2), QStringLiteral("/data/b.grd"));
+  }
+
+  void projectProcessingAndJobsWithRealData() {
+    KernelConfig config;
+    config.toolDirectories = {MBSTUDIO_TOOL_DIR};
+    Kernel kernel(config);
+    kernel.plugins().addStatic([] { return std::make_unique<mbsystem::MbSystemPlugin>(); });
+    kernel.plugins().addStatic([] { return std::make_unique<project::ProjectPlugin>(); });
+    QCOMPARE(kernel.start(), std::size_t(2));
+    std::string error;
+    QVERIFY(ui::registerContributions(kernel, error));
+    ui::AppController app(&kernel);
+    auto *project = app.projectModel();
+    auto *processing = app.processingModel();
+    auto *jobs = app.jobModel();
+    QVERIFY(project->available());
+    QVERIFY(!project->isOpen());
+    QVERIFY(!processing->ready());  // no project yet
+
+    const QString root = freshFolder(QStringLiteral("viewmodels")) + QStringLiteral("/survey");
+    QVERIFY(project->createProject(root, QStringLiteral("Survey")));
+    QVERIFY(project->isOpen());
+    QVERIFY(project->recentProjects().contains(project->file()));
+    QDir().mkpath(root + QStringLiteral("/raw"));
+    QVERIFY(QFile::copy(testData(), root + QStringLiteral("/raw/line.mb21")));
+    QCOMPARE(project->addData({QUrl::fromLocalFile(root + QStringLiteral("/raw"))}), 1);
+    QTRY_COMPARE_WITH_TIMEOUT(project->inspectedCount(), 1, 60000);
+    QCOMPARE(project->lineCount(), 1);
+    QVERIFY(project->summary().value(QStringLiteral("hasBounds")).toBool());
+
+    // selection
+    const QString lineId = project->lineInfo(QStringLiteral("L1")).value(QStringLiteral("lineId")).toString();
+    QCOMPARE(lineId, QStringLiteral("L1"));
+    project->select(lineId);
+    QCOMPARE(project->selectedCount(), 1);
+    project->select(lineId, 1);
+    QCOMPARE(project->selectedCount(), 0);
+
+    // the grid panel: schema, visibility rules, preview, estimate
+    processing->setKind(QStringLiteral("grid"));
+    QVERIFY(processing->fields().size() > 8);
+    QVERIFY(!processing->fieldVisible(QStringLiteral("clipMode")));
+    processing->setValue(QStringLiteral("clip"), 3);
+    QVERIFY(processing->fieldVisible(QStringLiteral("clipMode")));
+    processing->setValue(QStringLiteral("clip"), 0);
+    QVERIFY(!processing->fieldVisible(QStringLiteral("threshold")));
+    processing->setValue(QStringLiteral("algorithm"), 3);
+    QVERIFY(processing->fieldVisible(QStringLiteral("threshold")));
+    processing->setValue(QStringLiteral("algorithm"), 1);
+    processing->setValue(QStringLiteral("spacing"), 20.0);
+    processing->setValue(QStringLiteral("name"), QStringLiteral("bathy"));
+    processing->updatePreview();
+    QVERIFY2(processing->ready(), qPrintable(processing->error()));
+    QVERIFY(processing->preview().contains(QStringLiteral("mbgrid")));
+    QVERIFY(processing->preview().contains(QStringLiteral("-E20/20/meters!")));
+    QVERIFY(processing->outputs().first().endsWith(QStringLiteral("bathy.grd")));
+    QVERIFY(!processing->estimate().isEmpty());
+
+    // run it as a background job
+    const qint64 id = processing->run();
+    QVERIFY(id > 0);
+    QVERIFY(jobs->waitFor(id, 120000));
+    const QVariantMap job = jobs->job(id);
+    QCOMPARE(job.value(QStringLiteral("state")).toString(), QStringLiteral("completed"));
+    QVERIFY(!jobs->log(id).isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(project->products()->property("count").toInt(), 3, 10000);  // grid, count, std. dev.
+    QVERIFY(!project->newestProductOfJob(id).isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(project->history()->property("count").toInt() >= 2, 10000);
+    QVERIFY(project->waitForMap(30000));
+    QVERIFY(!project->mapLayers().isEmpty());
+    QVERIFY(!project->mapLayers().first().image.isNull());
+
+    // other panels produce valid plans too
+    processing->setKind(QStringLiteral("clean"));
+    processing->updatePreview();
+    QVERIFY2(processing->ready(), qPrintable(processing->error()));
+    QVERIFY(processing->preview().contains(QStringLiteral("mbclean")));
+    processing->setKind(QStringLiteral("export"));
+    QVERIFY(processing->options(QStringLiteral("source")).size() >= 2);  // soundings and the grid
+    processing->setKind(QStringLiteral("corrections"));
+    processing->updatePreview();
+    QVERIFY(!processing->ready());  // nothing chosen yet
+    processing->setValue(QStringLiteral("useDraft"), true);
+    processing->setValue(QStringLiteral("draft"), 4.5);
+    processing->updatePreview();
+    QVERIFY2(processing->preview().contains(QStringLiteral("-PDRAFT:4.5")), qPrintable(processing->preview()));
+
+    // reopening restores the documents of the project
+    app.openWorkspace(QStringLiteral("history"));
+    QTest::qWait(700);  // the workspace state is saved after a short delay
+    const QString file = project->file();
+    project->closeProject();
+    QVERIFY(!project->isOpen());
+    QCOMPARE(app.openFile(file), QStringLiteral("map"));
+    QVERIFY(project->isOpen());
+    QVERIFY(app.workspaceModel()->indexOf(QStringLiteral("history")) >= 0);
+    QCOMPARE(project->lineCount(), 1);
   }
 
   void appControllerRoutesFiles() {
@@ -329,36 +492,56 @@ class QmlUiTest : public QObject {
     Kernel kernel(config);
     kernel.plugins().addStatic([] { return std::make_unique<mbsystem::MbSystemPlugin>(); });
     QCOMPARE(kernel.start(), std::size_t(1));
+    std::string error;
+    QVERIFY(ui::registerContributions(kernel, error));
     ui::AppController app(&kernel);
     QVERIFY(ui::AppController::isGridFile(QStringLiteral("C:/x/bathy.GRD")));
     QVERIFY(!ui::AppController::isGridFile(QStringLiteral("line.mb88")));
+    QVERIFY(ui::AppController::isProjectFile(QStringLiteral("D:/s/Survey.mbsproj")));
+    QVERIFY(!app.projectModel()->available());  // no project plugin: the rest still works
     QSignalSpy notify(&app, &ui::AppController::notify);
-    QCOMPARE(app.openFile(QStringLiteral("does-not-exist.mb21")), -1);
+    QCOMPARE(app.openFile(QStringLiteral("does-not-exist.mb21")), QString());
     QCOMPARE(notify.count(), 1);
-    QCOMPARE(app.openFile(testData()), int(ui::AppController::InspectPage));
-    QCOMPARE(app.currentPage(), int(ui::AppController::InspectPage));
+    QCOMPARE(app.openFile(testData()), QStringLiteral("inspect"));
+    QCOMPARE(app.workspaceModel()->currentWorkspace(), QStringLiteral("inspect"));
     QVERIFY(app.recentFiles().contains(QFileInfo(testData()).absoluteFilePath()));
     QVERIFY(app.swathModel()->waitForFinished(30000));
     QVERIFY(app.swathModel()->loaded());
     app.runToolOn(QStringLiteral("mbinfo"), testData());
-    QCOMPARE(app.currentPage(), int(ui::AppController::ToolsPage));
+    QCOMPARE(app.workspaceModel()->currentWorkspace(), QStringLiteral("programs"));
     QVERIFY(app.toolsModel()->arguments().startsWith(QStringLiteral("-I ")));
     QVERIFY(!app.plugins().isEmpty());
     QVERIFY(!app.services().isEmpty());
     QVERIFY(!app.commands().isEmpty());
+    QVERIFY(!app.actions().isEmpty());
+    QSignalSpy uiActions(&app, &ui::AppController::uiAction);
+    app.trigger(QStringLiteral("ui:panel:grid"));
+    QCOMPARE(uiActions.count(), 1);
+    QCOMPARE(uiActions.first().first().toString(), QStringLiteral("panel:grid"));
+    app.setUiValue(QStringLiteral("test"), 42);
+    QCOMPARE(app.uiValue(QStringLiteral("test")).toInt(), 42);
     app.clearRecentFiles();
     QVERIFY(app.recentFiles().isEmpty());
   }
 
-  // Load the complete QML user interface offscreen against real services,
-  // visit every page and fail on any QML warning.
+  void mapViewSteps() {
+    QCOMPARE(ui::MapView::niceStep(10.0, 6), 2.0);
+    QCOMPARE(ui::MapView::niceStep(0.01, 6), 10.0 / 3600);
+    QCOMPARE(ui::MapView::niceStep(1000.0, 6), 90.0);
+  }
+
+  // Load the complete QML workbench offscreen against real services and a
+  // real project, visit every workspace and panel, and fail on any warning.
   void qmlLoadsWithoutWarnings() {
     KernelConfig config;
     config.toolDirectories = {MBSTUDIO_TOOL_DIR};
     config.version = MBSTUDIO_VERSION;
     Kernel kernel(config);
     kernel.plugins().addStatic([] { return std::make_unique<mbsystem::MbSystemPlugin>(); });
+    kernel.plugins().addStatic([] { return std::make_unique<project::ProjectPlugin>(); });
     kernel.start();
+    std::string error;
+    QVERIFY(ui::registerContributions(kernel, error));
 
     ui::registerQmlTypes();
     ui::AppController app(&kernel);
@@ -376,79 +559,109 @@ class QmlUiTest : public QObject {
       QVERIFY2(!engine.rootObjects().isEmpty(), qPrintable(warnings.join(QLatin1Char('\n'))));
       auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
       QVERIFY(window != nullptr);
-      window->resize(1360, 860);
-
-      QDir().mkpath(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR));
-      // a real grid made by mbgrid from the sample data
-      const QString dir = QStringLiteral(MBSTUDIO_SCREENSHOT_DIR);
-      QFile datalist(dir + QStringLiteral("/datalist.mb-1"));
-      QVERIFY(datalist.open(QIODevice::WriteOnly | QIODevice::Text));
-      datalist.write((testData() + QStringLiteral(" 21\n")).toUtf8());
-      datalist.close();
-      auto tools = kernel.services().get<IToolService>();
-      const auto gridded = tools->run("mbgrid",
-                                      {"-I" + datalist.fileName().toStdString(), "-O" + (dir + "/bathy").toStdString(),
-                                       "-E10/0/meters!", "-A2", "-N", "-C3", "-R-124.507/-124.496/40.835/40.842"},
-                                      dir.toStdString(), nullptr);
-      QCOMPARE(gridded.exitCode, 0);
-      app.openFile(dir + QStringLiteral("/bathy.grd"));
-      QVERIFY(app.gridModel()->waitForFinished(30000));
-      QVERIFY2(app.gridModel()->loaded(), qPrintable(app.gridModel()->error()));
-      app.openFile(testData());
-      QVERIFY(app.swathModel()->waitForFinished(30000));
-      const char *names[] = {"home", "inspect", "grids", "programs", "formats", "plugins"};
-      for (int page = 0; page <= ui::AppController::PluginsPage; page++) {
-        app.setCurrentPage(page);
-        if (page == ui::AppController::ToolsPage) {
-          app.toolsModel()->selectTool(QStringLiteral("mbinfo"));
-          app.toolsModel()->showHelp();
-          app.toolsModel()->waitForFinished(30000);
-        }
-        QTest::qWait(150);
+      window->resize(1440, 900);
+      const QString shots = QStringLiteral(MBSTUDIO_SCREENSHOT_DIR);
+      QDir().mkpath(shots);
+      auto shoot = [&](const QString &name) {
+        QTest::qWait(200);
         const QImage shot = window->grabWindow();
         QVERIFY(!shot.isNull());
-        shot.save(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR "/%1-%2.png").arg(page).arg(QLatin1String(names[page])));
-      }
-      app.setDarkTheme(false);
-      QTest::qWait(150);
-      window->grabWindow().save(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR "/light-theme.png"));
-      app.setDarkTheme(true);
+        shot.save(shots + QStringLiteral("/") + name + QStringLiteral(".png"));
+      };
+      QCOMPARE(app.workspaceModel()->currentWorkspace(), QStringLiteral("start"));
+      shoot(QStringLiteral("01-start"));
 
+      // a project with real data, gridded through the processing panel
+      auto *project = app.projectModel();
+      const QString root = freshFolder(QStringLiteral("workbench")) + QStringLiteral("/EM survey");
+      QVERIFY(project->createProject(root, QStringLiteral("EM survey")));
+      QDir().mkpath(root + QStringLiteral("/raw"));
+      QVERIFY(QFile::copy(testData(), root + QStringLiteral("/raw/TN136HS.309.snipped.mb21")));
+      QCOMPARE(project->addData({root + QStringLiteral("/raw")}), 1);
+      QTRY_COMPARE_WITH_TIMEOUT(project->inspectedCount(), 1, 60000);
+      app.openWorkspace(QStringLiteral("map"));
+      QVERIFY(project->waitForMap(30000));
+      shoot(QStringLiteral("02-map-lines"));
+
+      app.trigger(QStringLiteral("ui:panel:grid"));
+      auto *processing = app.processingModel();
+      processing->setValue(QStringLiteral("spacing"), 20.0);
+      processing->setValue(QStringLiteral("clip"), 2);
+      processing->updatePreview();
+      shoot(QStringLiteral("03-grid-panel"));
+      const qint64 id = processing->run();
+      QVERIFY2(id > 0, qPrintable(processing->error()));
+      QVERIFY(app.jobModel()->waitFor(id, 120000));
+      QTRY_VERIFY_WITH_TIMEOUT(project->products()->property("count").toInt() >= 3, 10000);
+      QVERIFY(project->waitForMap(30000));
+      shoot(QStringLiteral("04-map-grid-and-jobs"));
+
+      // the grid view with its quality layers
+      const QString grid = project->newestProductOfJob(id);
+      QVERIFY(!grid.isEmpty());
+      app.openGrid(grid);
+      QVERIFY(app.gridModel()->waitForFinished(30000));
+      QVERIFY2(app.gridModel()->loaded(), qPrintable(app.gridModel()->error()));
+      QVERIFY(app.gridModel()->hasQualityGrids());
+      shoot(QStringLiteral("05-grid"));
+      app.gridModel()->setLayer(1);
+      QVERIFY(app.gridModel()->waitForFinished(30000));
+      shoot(QStringLiteral("06-grid-count"));
+      app.gridModel()->setLayer(0);
+
+      // every processing panel renders
+      for (const QString &kind : ui::ProcessingViewModel::kinds()) {
+        app.trigger(QStringLiteral("ui:panel:") + kind);
+        QTest::qWait(60);
+      }
+      shoot(QStringLiteral("07-export-panel"));
+
+      app.inspectLine(QStringLiteral("L1"));
+      QVERIFY(app.swathModel()->waitForFinished(30000));
+      shoot(QStringLiteral("08-inspect"));
+      const char *others[] = {"history", "programs", "formats", "plugins", "start"};
+      int n = 9;
+      for (const char *w : others) {
+        app.openWorkspace(QString::fromLatin1(w));
+        if (QLatin1String(w) == QLatin1String("programs")) {
+          app.toolsModel()->selectTool(QStringLiteral("mbgrid"));
+          QTest::qWait(100);
+        }
+        shoot(QStringLiteral("%1-%2").arg(n++, 2, 10, QLatin1Char('0')).arg(QLatin1String(w)));
+      }
       // the help tab shows the page of the selected program
-      app.setCurrentPage(ui::AppController::ToolsPage);
-      app.toolsModel()->selectTool(QStringLiteral("mbgrid"));
+      app.openWorkspace(QStringLiteral("programs"));
       QTest::qWait(150);
-      auto *helpView = window->findChild<QObject *>(QStringLiteral("helpView"));
-      QVERIFY(helpView != nullptr);
+      // (documents are created by Loaders: walk the item tree)
+      QList<QQuickItem *> helpViews;
+      findItems(window->contentItem(), QStringLiteral("helpView"), helpViews);
+      QCOMPARE(helpViews.size(), 1);
+      QQuickItem *helpView = helpViews.first();
       QVERIFY(helpView->property("text").toString().contains(QStringLiteral("mbgrid")));
 
-      // hover and selection are separate layers that only fade their opacity,
-      // so the sidebar never blends through a dark transparent colour
-      QList<QQuickItem *> hovers;
-      findItems(window->contentItem(), QStringLiteral("navHover"), hovers);
-      QVERIFY2(hovers.size() >= 6, qPrintable(QString::number(hovers.size())));
-      for (auto *h : hovers)
-        QCOMPARE(h->property("opacity").toDouble(), 0.0);
+      app.openWorkspace(QStringLiteral("map"));
+      app.setDarkTheme(false);
+      shoot(QStringLiteral("light-theme"));
+      app.setDarkTheme(true);
+
+      app.trigger(QStringLiteral("ui:palette"));
+      shoot(QStringLiteral("command-palette"));
+      QTest::keyClick(window, Qt::Key_Escape);
 
       // switch the language at run time: QML bindings are retranslated
       QObject::connect(&app, &ui::AppController::languageChanged, &engine, &QQmlEngine::retranslate);
       for (const QString lang : {QStringLiteral("ja"), QStringLiteral("zh_CN")}) {
         app.setLanguage(lang);
         QTest::qWait(200);
-        QVERIFY(helpView->property("text").toString().contains(QStringLiteral("mbgrid")));
-        for (int page = 0; page <= ui::AppController::PluginsPage; page++) {
-          app.setCurrentPage(page);
-          QTest::qWait(100);
-        }
-        app.setCurrentPage(ui::AppController::ToolsPage);
-        QList<QQuickItem *> tabs;
-        findItems(window->contentItem(), QStringLiteral("toolTabs"), tabs);
-        QCOMPARE(tabs.size(), 1);
-        tabs.first()->setProperty("currentIndex", 0);  // the help tab
-        QTest::qWait(150);
-        window->grabWindow().save(QStringLiteral(MBSTUDIO_SCREENSHOT_DIR "/language-%1.png").arg(lang));
+        app.trigger(QStringLiteral("ui:panel:grid"));
+        app.openWorkspace(QStringLiteral("map"));
+        shoot(QStringLiteral("language-%1").arg(lang));
+        app.openWorkspace(QStringLiteral("start"));
+        QTest::qWait(100);
       }
       app.setLanguage(QStringLiteral("en"));
+      project->closeProject();
+      QTest::qWait(100);
     }
     QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join(QLatin1Char('\n'))));
   }

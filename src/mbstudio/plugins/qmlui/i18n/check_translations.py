@@ -9,6 +9,9 @@ Collects the translatable texts of the QML user interface plugin:
     sources of the plugin
   - the program categories of the MB-System program catalogue
     (plugins/mbsystem/ToolService.cpp), translated in context "ToolCategory"
+  - the titles of the workbench contributions (workspaces and menu actions)
+    of the user interface (QmlFrontend.cpp) and of the project plugin
+    (plugins/project/ProjectPlugin.cpp), translated in context "Contribution"
 and checks every catalogue i18n/<language>.json: each text needs a
 non-empty translation with the same %1, %2, ... placeholders, and the
 catalogue must not keep texts that are no longer used.
@@ -51,6 +54,16 @@ def collect(source):
     with open(catalogue, encoding="utf-8") as f:
         for m in re.finditer(r'entry\(\s*"[^"]+"\s*,\s*' + STRING, f.read()):
             contexts.setdefault("ToolCategory", set()).add(unescape(m.group(1)))
+    contributions = contexts.setdefault("Contribution", set())
+    with open(os.path.join(source, "QmlFrontend.cpp"), encoding="utf-8") as f:
+        for m in re.finditer(r'\b(?:workspace|action)\(\s*"[\w.:-]+"\s*,\s*' + STRING, f.read()):
+            contributions.add(unescape(m.group(1)))
+    plugin = os.path.join(source, "..", "project", "ProjectPlugin.cpp")
+    if os.path.exists(plugin):
+        with open(plugin, encoding="utf-8") as f:
+            for m in re.finditer(r'\{"[\w.:-]+"\s*,\s*' + STRING + r'\s*,\s*"(?:file|process|tools|view|help)"',
+                                 f.read()):
+                contributions.add(unescape(m.group(1)))
     return messages, contexts
 
 

@@ -18,11 +18,27 @@ GridViewModel::GridViewModel(std::shared_ptr<IGridService> grids, std::shared_pt
   renderTimer_.setSingleShot(true);
   renderTimer_.setInterval(40);  // coalesce slider movements
   connect(&renderTimer_, &QTimer::timeout, this, &GridViewModel::startRender);
-  connect(&loadWatcher_, &QFutureWatcher<GridLoadResult>::finished, this, [this]() {
-    GridLoadResult result = loadWatcher_.result();
+  connect(&loadWatcher_, &QFutureWatcher<Loaded>::finished, this, [this]() {
+    Loaded loaded = loadWatcher_.result();
+    GridLoadResult &result = loaded.main;
     loading_ = false;
     if (result.ok) {
       grid_ = std::make_shared<const Grid>(std::move(result.grid));
+      num_ = loaded.num;
+      sd_ = loaded.sd;
+      if (layer_ != 0 && !hasQualityGrids())
+        layer_ = 0;
+      statistics_.clear();
+      statistics_[QStringLiteral("nodes")] = static_cast<double>(loaded.statistics.nodes);
+      statistics_[QStringLiteral("valid")] = static_cast<double>(loaded.statistics.valid);
+      statistics_[QStringLiteral("empty")] = static_cast<double>(loaded.statistics.empty);
+      statistics_[QStringLiteral("emptyPercent")] = 100.0 * loaded.statistics.emptyRatio;
+      statistics_[QStringLiteral("mean")] = loaded.statistics.mean;
+      statistics_[QStringLiteral("stddev")] = loaded.statistics.stddev;
+      statistics_[QStringLiteral("interpolated")] = static_cast<double>(loaded.interpolated);
+      interpolatedPercent_ = loaded.statistics.valid > 0
+                                 ? 100.0 * static_cast<double>(loaded.interpolated) / static_cast<double>(loaded.statistics.valid)
+                                 : 0.0;
       const Grid &g = *grid_;
       info_.clear();
       info_[QStringLiteral("nx")] = g.nx;
@@ -46,6 +62,7 @@ GridViewModel::GridViewModel(std::shared_ptr<IGridService> grids, std::shared_pt
       error_ = QString::fromStdString(result.error);
     }
     emit stateChanged();
+    emit optionsChanged();
   });
   connect(&renderWatcher_, &QFutureWatcher<QImage>::finished, this, [this]() {
     {
@@ -84,6 +101,65 @@ void GridViewModel::setColorMap(int value) {
   options_.colorMap = static_cast<ColorMap>(value);
   emit optionsChanged();
   scheduleRender();
+}
+
+void GridViewModel::setLayer(int value) {
+  value = std::clamp(value, 0, 2);
+  if (value == layer_ || (value == 1 && !num_) || (value == 2 && !sd_))
+    return;
+  layer_ = value;
+  emit optionsChanged();
+  scheduleRender();
+}
+
+void GridViewModel::setShowInterpolated(bool value) {
+  if (value == showInterpolated_)
+    return;
+  showInterpolated_ = value;
+  emit optionsChanged();
+  scheduleRender();
+}
+
+void GridViewModel::setAutoRange(bool value) {
+  if (value == options_.autoRange)
+    return;
+  options_.autoRange = value;
+  if (!value) {
+    // start from the current data range
+    const auto g = displayed();
+    if (g && options_.zmin >= options_.zmax) {
+      options_.zmin = g->zmin;
+      options_.zmax = g->zmax;
+    }
+  }
+  emit optionsChanged();
+  scheduleRender();
+}
+
+void GridViewModel::setRangeMin(double value) {
+  if (qFuzzyCompare(value + 1e9, options_.zmin + 1e9))
+    return;
+  options_.zmin = value;
+  emit optionsChanged();
+  if (!options_.autoRange)
+    scheduleRender();
+}
+
+void GridViewModel::setRangeMax(double value) {
+  if (qFuzzyCompare(value + 1e9, options_.zmax + 1e9))
+    return;
+  options_.zmax = value;
+  emit optionsChanged();
+  if (!options_.autoRange)
+    scheduleRender();
+}
+
+std::shared_ptr<const Grid> GridViewModel::displayed() const {
+  if (layer_ == 1 && num_)
+    return num_;
+  if (layer_ == 2 && sd_)
+    return sd_;
+  return grid_;
 }
 
 void GridViewModel::setHillshade(bool value) {
@@ -129,6 +205,7 @@ QVariantList GridViewModel::legend() const {
   QVariantList out;
   if (!renderer_)
     return out;
+  // the colour map scales the shown range (manual or the data range)
   for (int i = 0; i <= 10; i++) {
     const double t = i / 10.0;
     QVariantMap stop;
@@ -159,13 +236,46 @@ void GridViewModel::load(const QString &path) {
   emit stateChanged();
   auto grids = grids_;
   const std::string file = path.toStdString();
-  loadWatcher_.setFuture(QtConcurrent::run([grids, file]() { return grids->load(file); }));
+  // quality grids written by mbgrid -M / mbmosaic -M next to the grid
+  QString root = path;
+  if (root.endsWith(QLatin1String(".grd"), Qt::CaseInsensitive))
+    root.chop(4);
+  const std::string numFile = (root + QStringLiteral("_num.grd")).toStdString();
+  const std::string sdFile = (root + QStringLiteral("_sd.grd")).toStdString();
+  const bool isQuality = root.endsWith(QLatin1String("_num")) || root.endsWith(QLatin1String("_sd"));
+  loadWatcher_.setFuture(QtConcurrent::run([grids, file, numFile, sdFile, isQuality]() {
+    Loaded loaded;
+    loaded.main = grids->load(file);
+    if (!loaded.main.ok)
+      return loaded;
+    loaded.statistics = grids->statistics(loaded.main.grid);
+    if (isQuality)
+      return loaded;
+    const Grid &g = loaded.main.grid;
+    GridLoadResult num = grids->load(numFile);
+    if (num.ok && num.grid.nx == g.nx && num.grid.ny == g.ny) {
+      // cells with a value but without data were filled by interpolation
+      for (std::size_t i = 0; i < g.z.size(); i++)
+        if (std::isfinite(g.z[i]) && !(num.grid.z[i] > 0.0f))
+          loaded.interpolated++;
+      loaded.num = std::make_shared<const Grid>(std::move(num.grid));
+    }
+    GridLoadResult sd = grids->load(sdFile);
+    if (sd.ok && sd.grid.nx == g.nx && sd.grid.ny == g.ny)
+      loaded.sd = std::make_shared<const Grid>(std::move(sd.grid));
+    return loaded;
+  }));
 }
 
 void GridViewModel::clear() {
   loadWatcher_.waitForFinished();
   renderWatcher_.waitForFinished();
   grid_.reset();
+  num_.reset();
+  sd_.reset();
+  layer_ = 0;
+  statistics_.clear();
+  interpolatedPercent_ = 0.0;
   info_.clear();
   path_.clear();
   error_.clear();
@@ -192,15 +302,31 @@ void GridViewModel::startRender() {
   }
   rendering_ = true;
   emit stateChanged();
-  auto grid = grid_;
+  auto grid = displayed();
   auto renderer = renderer_;
-  const RenderOptions options = options_;
-  renderWatcher_.setFuture(QtConcurrent::run([grid, renderer, options]() {
+  RenderOptions options = options_;
+  if (layer_ != 0)
+    options.hillshade = false;  // counts and deviations are not a surface
+  // hatch interpolated cells of the surface (needs the count grid)
+  std::shared_ptr<const Grid> num = layer_ == 0 && showInterpolated_ ? num_ : nullptr;
+  renderWatcher_.setFuture(QtConcurrent::run([grid, num, renderer, options]() {
     const Image image = renderer->render(*grid, options);
     QImage out(image.width, image.height, QImage::Format_ARGB32);
     for (int y = 0; y < image.height; y++)
       memcpy(out.scanLine(y), image.pixels.data() + static_cast<size_t>(y) * image.width,
              static_cast<size_t>(image.width) * 4);
+    if (num && image.width == grid->nx && image.height == grid->ny) {
+      for (int y = 0; y < image.height; y++) {
+        auto *line = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < image.width; x++) {
+          const float z = grid->at(x, y);
+          if (!std::isfinite(z) || num->at(x, y) > 0.0f || ((x + y) & 3) > 1)
+            continue;
+          const QRgb c = line[x];
+          line[x] = qRgba((qRed(c) + 255 * 2) / 3, (qGreen(c) + 255) / 2, (qBlue(c) + 255 * 2) / 3, qAlpha(c));
+        }
+      }
+    }
     return out;
   }));
 }
@@ -217,6 +343,16 @@ QVariantMap GridViewModel::probe(double u, double v) const {
   const float z = g.at(ix, iy);
   out[QStringLiteral("valid")] = !std::isnan(z);
   out[QStringLiteral("z")] = std::isnan(z) ? 0.0 : static_cast<double>(z);
+  if (num_ && num_->nx == g.nx && num_->ny == g.ny) {
+    const float n = num_->at(ix, iy);
+    out[QStringLiteral("count")] = std::isfinite(n) ? static_cast<double>(n) : 0.0;
+    out[QStringLiteral("interpolated")] = !std::isnan(z) && !(n > 0.0f);
+  }
+  if (sd_ && sd_->nx == g.nx && sd_->ny == g.ny) {
+    const float d = sd_->at(ix, iy);
+    if (std::isfinite(d))
+      out[QStringLiteral("stddev")] = static_cast<double>(d);
+  }
   return out;
 }
 

@@ -39,7 +39,7 @@ target_compile_definitions(mbstudio_mbsystem_test PRIVATE
   MBSTUDIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   MBSTUDIO_TOOL_DIR="${CMAKE_BINARY_DIR}/src/utilities"
   MBSTUDIO_HELP_DIR="${MBSTUDIO_HELP_DIR}")
-add_dependencies(mbstudio_mbsystem_test mbinfo mbgrid mbformat)
+add_dependencies(mbstudio_mbsystem_test mbinfo mbgrid mbformat mbdatalist mbcopy mblist)
 add_test(NAME mbstudio_mbsystem_test COMMAND mbstudio_mbsystem_test)
 mb_set_test_environment(mbstudio_mbsystem_test)
 
@@ -53,6 +53,18 @@ set_tests_properties(mbstudio_host_test PROPERTIES
 if(Python3_Interpreter_FOUND)
   add_test(NAME mbstudio_help_pages_test
            COMMAND "${Python3_EXECUTABLE}" "${MBSTUDIO_HELP_DIR}/check_help.py" "${MBSTUDIO_HELP_DIR}")
+endif()
+
+# Survey projects: import, gridding, persistence (needs Qt Core).
+if(TARGET mbstudio_project_core)
+  add_executable(mbstudio_project_test ProjectServiceTest.cpp)
+  target_link_libraries(mbstudio_project_test PRIVATE mbstudio_project_core mbstudio_mbsystem_core GTest::gtest_main)
+  target_compile_definitions(mbstudio_project_test PRIVATE
+    MBSTUDIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    MBSTUDIO_TOOL_DIR="${CMAKE_BINARY_DIR}/src/utilities")
+  add_dependencies(mbstudio_project_test mbinfo mbgrid mbdatalist mbcopy mblist)
+  add_test(NAME mbstudio_project_test COMMAND mbstudio_project_test)
+  mb_set_test_environment(mbstudio_project_test)
 endif()
 
 if(TARGET mbstudio_qmlui_core)

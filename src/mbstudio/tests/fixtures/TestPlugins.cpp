@@ -1,5 +1,6 @@
 // Test fixture plugins, compiled into separate shared libraries:
-//   MBSTUDIO_FIXTURE == 1 : "fixture" plugin providing a service and a command
+//   MBSTUDIO_FIXTURE == 1 : "fixture" plugin providing a service, a command and
+//                            workbench contributions
 //   MBSTUDIO_FIXTURE == 2 : "dependent" plugin requiring "fixture"
 //   MBSTUDIO_FIXTURE == 3 : library with a wrong ABI version
 #include <memory>
@@ -20,12 +21,24 @@ class GreeterImpl : public mbstudio::test::IGreeter {
 class FixturePlugin : public mbstudio::IPlugin {
  public:
   mbstudio::PluginInfo info() const override { return {"fixture", "Fixture", "1.0", "test plugin", {}}; }
-  bool initialize(mbstudio::Kernel &kernel, std::string &) override {
+  bool initialize(mbstudio::Kernel &kernel, std::string &error) override {
     kernel.services().provide<mbstudio::test::IGreeter>(std::make_shared<GreeterImpl>(), "fixture");
     kernel.commands().add({"fixture.greet", "Greet", "Say hello", "fixture"}, [](const mbstudio::ValueMap &args) {
       return mbstudio::CommandResult::success({{"text", "Hello, " + mbstudio::getString(args, "name")}});
     });
-    return true;
+    // a workspace and a menu action, without touching the front end
+    mbstudio::WorkspaceContribution workspace;
+    workspace.id = "fixture.workspace";
+    workspace.title = "Fixture";
+    workspace.qmlUrl = "qrc:/fixture/FixtureWorkspace.qml";
+    workspace.owner = "fixture";
+    mbstudio::ActionContribution action;
+    action.id = "fixture.greet";
+    action.title = "Greet";
+    action.menu = "tools";
+    action.commandId = "fixture.greet";
+    action.owner = "fixture";
+    return kernel.contributions().addAll({workspace}, {action}, {}, &error);
   }
 };
 #elif MBSTUDIO_FIXTURE == 2

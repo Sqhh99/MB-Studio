@@ -13,7 +13,9 @@ add_library(mbstudio_mbsystem_core STATIC
   GridRenderer.cpp
   GridService.cpp
   HelpService.cpp
+  JobService.cpp
   MbSystemPlugin.cpp
+  ProcessingService.cpp
   SwathService.cpp
   ToolService.cpp)
 set_target_properties(mbstudio_mbsystem_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

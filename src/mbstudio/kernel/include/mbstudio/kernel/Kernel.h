@@ -1,7 +1,7 @@
 // MB-Studio kernel.
 //
 // The kernel is deliberately small: it owns the service registry, the event
-// bus, the command registry and the plugin manager, and knows nothing about
+// bus, the command and contribution registries and the plugin manager, and knows nothing about
 // MB-System, Qt or any user interface. All functionality is contributed by
 // plugins (see Plugin.h), including the graphical front end.
 #pragma once
@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "mbstudio/kernel/CommandRegistry.h"
+#include "mbstudio/kernel/Contributions.h"
 #include "mbstudio/kernel/EventBus.h"
 #include "mbstudio/kernel/Export.h"
 #include "mbstudio/kernel/PluginManager.h"
@@ -51,6 +52,7 @@ class MBSTUDIO_KERNEL_API Kernel {
   ServiceRegistry &services() { return services_; }
   EventBus &events() { return events_; }
   CommandRegistry &commands() { return commands_; }
+  ContributionRegistry &contributions() { return contributions_; }
   PluginManager &plugins() { return plugins_; }
 
   // Discover plugins in the configured directories and start them.
@@ -73,6 +75,7 @@ class MBSTUDIO_KERNEL_API Kernel {
   ServiceRegistry services_;
   EventBus events_;
   CommandRegistry commands_;
+  ContributionRegistry contributions_;
   bool started_ = false;
   mutable std::mutex logMutex_;
   std::deque<LogEntry> log_;

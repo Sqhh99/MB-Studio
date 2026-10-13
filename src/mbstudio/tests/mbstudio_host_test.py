@@ -7,7 +7,9 @@ plugin work without the graphical front end, which is just another plugin.
 
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 EXE = os.environ.get('MBSTUDIO_EXE', 'mbstudio')
@@ -77,6 +79,37 @@ class HostTest(unittest.TestCase):
     result = json.loads(out)
     self.assertEqual('en,ja,zh_CN', result['languages'])
     self.assertIn('program.mbgrid', result)
+
+  def testProjectCommands(self):
+    # the project plugin needs Qt Core; skip where it is not built
+    _, plugins, _ = run('--list-plugins')
+    if 'project' not in plugins:
+      self.skipTest('project plugin not available')
+    root = tempfile.mkdtemp(prefix='mbstudio project ')
+    try:
+      project = os.path.join(root, 'survey')
+      raw = os.path.join(project, 'raw')
+      code, out, err = run('--command', 'project.create', 'dir=' + project, 'name=Survey')
+      self.assertEqual(0, code, out + err)
+      self.assertTrue(json.loads(out)['file'].endswith('.mbsproj'))
+      os.makedirs(raw)
+      shutil.copy(TESTDATA, raw)
+      code, out, err = run('--command', 'project.add', 'project=' + project, 'path=' + raw)
+      self.assertEqual(0, code, out + err)
+      result = json.loads(out)
+      self.assertEqual(1, result['added'])
+      self.assertEqual(1, result['inspected'])
+      code, out, err = run('--command', 'project.grid', 'project=' + project, 'spacing=20', 'name=bathy')
+      self.assertEqual(0, code, out + err)
+      result = json.loads(out)
+      self.assertEqual('completed', result['state'], out)
+      self.assertGreaterEqual(result['assets'], 1)
+      self.assertTrue(os.path.exists(os.path.join(project, 'products', 'grids', 'bathy.grd')))
+      code, out, err = run('--command', 'project.info', 'project=' + project)
+      self.assertEqual(0, code, out + err)
+      self.assertEqual(2, json.loads(out)['jobs'])
+    finally:
+      shutil.rmtree(root, ignore_errors=True)
 
   def testFailingCommand(self):
     code, out, _ = run('--command', 'swath.inspect', 'path=does-not-exist.mb21')

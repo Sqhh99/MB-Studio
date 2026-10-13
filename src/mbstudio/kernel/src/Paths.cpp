@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -257,6 +258,60 @@ bool makeDirectories(const std::string &path) {
   std::error_code ec;
   fs::create_directories(toPath(path), ec);
   return isDirectory(path);
+}
+
+bool writeTextFile(const std::string &path, const std::string &contents) {
+  std::ofstream out(toPath(path), std::ios::binary | std::ios::trunc);
+  if (!out)
+    return false;
+  out << contents;
+  return static_cast<bool>(out);
+}
+
+bool appendTextFile(const std::string &path, const std::string &contents) {
+  std::ofstream out(toPath(path), std::ios::binary | std::ios::app);
+  if (!out)
+    return false;
+  out << contents;
+  return static_cast<bool>(out);
+}
+
+bool removeFile(const std::string &path) {
+  std::error_code ec;
+  return fs::remove(toPath(path), ec);
+}
+
+long long fileSize(const std::string &path) {
+  std::error_code ec;
+  const auto size = fs::file_size(toPath(path), ec);
+  return ec ? -1 : static_cast<long long>(size);
+}
+
+double fileModifiedTime(const std::string &path) {
+  std::error_code ec;
+  const auto t = fs::last_write_time(toPath(path), ec);
+  if (ec)
+    return 0.0;
+  // file_clock has no portable epoch in C++17: shift by the difference to now
+  const auto sinceNow = t - fs::file_time_type::clock::now();
+  const auto now = std::chrono::system_clock::now();
+  const auto system = now + std::chrono::duration_cast<std::chrono::system_clock::duration>(sinceNow);
+  return std::chrono::duration<double>(system.time_since_epoch()).count();
+}
+
+std::string absolutePath(const std::string &path) {
+  std::error_code ec;
+  const fs::path p = fs::absolute(toPath(path), ec);
+  return ec ? path : fromPath(p.lexically_normal());
+}
+
+std::string relativePath(const std::string &path, const std::string &base) {
+  const fs::path p = toPath(absolutePath(path));
+  const fs::path b = toPath(absolutePath(base));
+  const fs::path rel = p.lexically_relative(b);
+  if (rel.empty())  // another drive
+    return toGenericSeparators(path);
+  return toGenericSeparators(fromPath(rel));
 }
 
 std::vector<std::string> listDirectory(const std::string &path) {

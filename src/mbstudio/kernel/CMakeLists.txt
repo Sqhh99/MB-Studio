@@ -4,6 +4,7 @@
 
 add_library(mbstudio_kernel SHARED
   src/CommandRegistry.cpp
+  src/Contributions.cpp
   src/EventBus.cpp
   src/Kernel.cpp
   src/Paths.cpp

@@ -36,11 +36,21 @@ struct GridLoadResult {
   Grid grid;
 };
 
+struct GridStatistics {
+  long long nodes = 0;
+  long long valid = 0;     // finite values
+  long long empty = 0;     // NaN (no data)
+  double emptyRatio = 0.0; // empty / nodes
+  double mean = 0.0;
+  double stddev = 0.0;
+};
+
 class IGridService {
  public:
   static constexpr const char *kServiceId = "mbsystem.grids";
   virtual ~IGridService() = default;
   virtual GridLoadResult load(const std::string &path) const = 0;
+  virtual GridStatistics statistics(const Grid &grid) const = 0;
 };
 
 enum class ColorMap { Haxby = 0, Bathymetry, Rainbow, Grayscale };

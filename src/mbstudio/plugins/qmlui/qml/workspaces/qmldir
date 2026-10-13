@@ -1,0 +1,8 @@
+StartWorkspace 1.0 StartWorkspace.qml
+MapWorkspace 1.0 MapWorkspace.qml
+GridWorkspace 1.0 GridWorkspace.qml
+InspectWorkspace 1.0 InspectWorkspace.qml
+HistoryWorkspace 1.0 HistoryWorkspace.qml
+ProgramsWorkspace 1.0 ProgramsWorkspace.qml
+FormatsWorkspace 1.0 FormatsWorkspace.qml
+PluginsWorkspace 1.0 PluginsWorkspace.qml
