@@ -50,7 +50,7 @@ Dialog {
                 font.family: Theme.monoFont
                 font.pixelSize: Theme.fontSmall + 1
                 color: Theme.consoleText
-                background: Rectangle { color: Theme.console; radius: Theme.radiusSmall }
+                background: Rectangle { color: Theme.consoleBackground; radius: Theme.radiusSmall }
             }
         }
         RowLayout {

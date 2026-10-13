@@ -526,7 +526,7 @@ class QmlUiTest : public QObject {
 
   void mapViewSteps() {
     QCOMPARE(ui::MapView::niceStep(10.0, 6), 2.0);
-    QCOMPARE(ui::MapView::niceStep(0.01, 6), 2.0 / 3600);
+    QCOMPARE(ui::MapView::niceStep(0.01, 6), 10.0 / 3600);
     QCOMPARE(ui::MapView::niceStep(1000.0, 6), 90.0);
   }
 

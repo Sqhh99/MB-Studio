@@ -9,7 +9,7 @@ Rectangle {
     property string text
     implicitHeight: label.implicitHeight + 16
     radius: Theme.radiusSmall
-    color: Theme.console
+    color: Theme.consoleBackground
     Text {
         id: label
         anchors.left: parent.left

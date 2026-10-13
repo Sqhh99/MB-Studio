@@ -29,7 +29,7 @@ QtObject {
     readonly property color tabActive: dark ? "#1B2836" : "#FFFFFF"
     readonly property color selection: dark ? "#1A4152" : "#D3EEF3"
     readonly property color mapBackground: dark ? "#081018" : "#DFE6EC"
-    readonly property color console: dark ? "#0A1016" : "#1D2630"
+    readonly property color consoleBackground: dark ? "#0A1016" : "#1D2630"
     readonly property color consoleText: "#D5E2EE"
 
     readonly property int radius: 10
