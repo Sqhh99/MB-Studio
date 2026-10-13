@@ -190,8 +190,42 @@ TEST(PluginManager, LoadsSharedLibraryPlugins) {
     }
   }
   EXPECT_TRUE(sawBadAbi);
+  EXPECT_TRUE(kernel.contributions().hasWorkspace("fixture.workspace"));
+  ASSERT_EQ(1u, kernel.contributions().actions().size());
+  EXPECT_EQ("fixture.greet", kernel.contributions().actions()[0].commandId);
   kernel.stop();
   EXPECT_FALSE(kernel.services().has<test::IGreeter>());
+  EXPECT_FALSE(kernel.contributions().hasWorkspace("fixture.workspace"));
+  EXPECT_TRUE(kernel.contributions().actions().empty());
+}
+
+TEST(Contributions, ValidatedAndAtomic) {
+  ContributionRegistry registry;
+  WorkspaceContribution map{"map", "Map", "map", "view", "qrc:/Map.qml", "ui", 10, true};
+  WorkspaceContribution grid{"grid", "Grid", "terrain", "view", "qrc:/Grid.qml", "ui", 5, false};
+  std::string error;
+  EXPECT_TRUE(registry.addWorkspace(map, &error)) << error;
+  EXPECT_TRUE(registry.addWorkspace(grid, &error)) << error;
+  ASSERT_EQ(2u, registry.workspaces().size());
+  EXPECT_EQ("grid", registry.workspaces()[0].id);  // sorted by order
+  EXPECT_FALSE(registry.addWorkspace(map, &error));
+  EXPECT_NE(std::string::npos, error.find("already"));
+
+  // one invalid entry rejects the whole set
+  ActionContribution good{"a.good", "Good", "tools", "cmd.good", "", "", "other", 1};
+  ActionContribution bad{"a.bad", "", "tools", "cmd.bad", "", "", "other", 2};
+  WorkspaceContribution extra{"extra", "Extra", "", "", "qrc:/Extra.qml", "other", 1, true};
+  EXPECT_FALSE(registry.addAll({extra}, {good, bad}, {}, &error));
+  EXPECT_TRUE(registry.actions().empty());
+  EXPECT_FALSE(registry.hasWorkspace("extra"));
+
+  PanelContribution panel{"p", "Panel", "middle", "qrc:/P.qml", "other", 1};
+  EXPECT_FALSE(registry.addPanel(panel, &error));
+  panel.placement = "right";
+  EXPECT_TRUE(registry.addPanel(panel, &error)) << error;
+  EXPECT_TRUE(registry.addAll({extra}, {good}, {}, &error)) << error;
+  EXPECT_EQ(3u, registry.removeOwnedBy("other"));
+  EXPECT_EQ(2u, registry.workspaces().size());
 }
 
 TEST(PluginManager, ReportsUnloadableLibraries) {

@@ -41,6 +41,17 @@ MBSTUDIO_KERNEL_API bool isDirectory(const std::string &path);
 // Whole file (without a UTF-8 byte order mark); false if it cannot be read.
 MBSTUDIO_KERNEL_API bool readTextFile(const std::string &path, std::string &contents);
 MBSTUDIO_KERNEL_API bool makeDirectories(const std::string &path);
+// Write (replace) or append to a file; UTF-8 file names on every platform.
+MBSTUDIO_KERNEL_API bool writeTextFile(const std::string &path, const std::string &contents);
+MBSTUDIO_KERNEL_API bool appendTextFile(const std::string &path, const std::string &contents);
+MBSTUDIO_KERNEL_API bool removeFile(const std::string &path);
+// Size in bytes (-1 if missing) and last modification (seconds since the epoch, 0 if missing).
+MBSTUDIO_KERNEL_API long long fileSize(const std::string &path);
+MBSTUDIO_KERNEL_API double fileModifiedTime(const std::string &path);
+// path relative to base (possibly starting with "../"), or path unchanged
+// when there is no relative form (another drive); generic '/' separators.
+MBSTUDIO_KERNEL_API std::string relativePath(const std::string &path, const std::string &base);
+MBSTUDIO_KERNEL_API std::string absolutePath(const std::string &path);
 MBSTUDIO_KERNEL_API std::vector<std::string> listDirectory(const std::string &path);
 
 MBSTUDIO_KERNEL_API std::string getEnv(const std::string &name);

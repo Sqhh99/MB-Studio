@@ -195,6 +195,7 @@ std::size_t PluginManager::startAll(Kernel &kernel) {
         p->record.error = error.empty() ? "initialization failed" : error;
         kernel.commands().removeOwnedBy(p->record.info.id);
         kernel.services().withdrawProvidedBy(p->record.info.id);
+        kernel.contributions().removeOwnedBy(p->record.info.id);
         kernel.log(LogLevel::Error, "kernel", "plugin " + p->record.info.id + " failed: " + p->record.error);
       }
     }
@@ -219,6 +220,7 @@ void PluginManager::stopAll(Kernel &kernel) {
     }
     kernel.commands().removeOwnedBy(p->record.info.id);
     kernel.services().withdrawProvidedBy(p->record.info.id);
+    kernel.contributions().removeOwnedBy(p->record.info.id);
     p->record.state = PluginState::Stopped;
     kernel.events().publish("plugin.stopped", {{"id", p->record.info.id}});
   }
