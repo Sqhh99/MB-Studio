@@ -3,6 +3,8 @@
 // The user interface is a plugin like any other: it depends on the services
 // of the "mbsystem" plugin only through their interfaces, and the kernel and
 // the MB-System adapter run without it (mbstudio --headless / --command).
+// Its own workspaces and menu actions are contributions in the kernel
+// registry, exactly like those of other plugins.
 #include <memory>
 
 #include "QmlFrontend.h"
@@ -22,9 +24,9 @@ class QmlUiPlugin : public IPlugin {
     info.dependencies = {"mbsystem"};
     return info;
   }
-  bool initialize(Kernel &kernel, std::string &) override {
+  bool initialize(Kernel &kernel, std::string &error) override {
     kernel.services().provide<IFrontend>(std::make_shared<QmlFrontend>(), "qmlui");
-    return true;
+    return registerContributions(kernel, error);
   }
 };
 

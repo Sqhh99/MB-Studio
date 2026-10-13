@@ -1,0 +1,8 @@
+ProjectPanel 1.0 ProjectPanel.qml
+PropertiesPanel 1.0 PropertiesPanel.qml
+ProcessingPanel 1.0 ProcessingPanel.qml
+JobsPanel 1.0 JobsPanel.qml
+LogDialog 1.0 LogDialog.qml
+NewProjectDialog 1.0 NewProjectDialog.qml
+CommandPalette 1.0 CommandPalette.qml
+AboutDialog 1.0 AboutDialog.qml

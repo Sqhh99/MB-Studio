@@ -8,7 +8,6 @@ import "../components"
 
 Item {
     id: page
-    signal openRequested()
     readonly property var swath: App.swath
     readonly property var s: swath.summary
 
@@ -29,7 +28,7 @@ Item {
         message: swath.error !== "" ? swath.error
                  : qsTr("Open a file in any of the formats supported by MB-System (for example .all, .kmall, .s7k, .gsf, .mb88) to see its statistics, navigation and depth profile.")
         actionText: qsTr("Open swath file…")
-        onAction: page.openRequested()
+        onAction: App.trigger("ui:openFile")
     }
 
     ColumnLayout {

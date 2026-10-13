@@ -21,11 +21,23 @@ QtObject {
     readonly property color success: "#2EBD85"
     readonly property color warning: "#F2A93B"
     readonly property color danger: "#E5534B"
+    readonly property color info: "#5B9BF0"
+
+    // workbench chrome
+    readonly property color panel: dark ? "#111A23" : "#F8FAFC"
+    readonly property color panelHeader: dark ? "#16212C" : "#EEF2F6"
+    readonly property color tabActive: dark ? "#1B2836" : "#FFFFFF"
+    readonly property color selection: dark ? "#1A4152" : "#D3EEF3"
+    readonly property color mapBackground: dark ? "#081018" : "#DFE6EC"
+    readonly property color console: dark ? "#0A1016" : "#1D2630"
+    readonly property color consoleText: "#D5E2EE"
 
     readonly property int radius: 10
     readonly property int radiusSmall: 6
     readonly property int spacing: 12
     readonly property int pagePadding: 24
+    readonly property int panelPadding: 12
+    readonly property int rowHeight: 30
 
     readonly property int fontSmall: 11
     readonly property int fontBody: 13
@@ -33,6 +45,15 @@ QtObject {
     readonly property int fontHeadline: 24
     readonly property string monoFont: Qt.platform.os === "windows" ? "Consolas"
                                      : Qt.platform.os === "osx" ? "Menlo" : "DejaVu Sans Mono"
+
+    // colour of a job or history state
+    function stateColor(state) {
+        if (state === "completed") return success
+        if (state === "failed") return danger
+        if (state === "cancelled") return textFaint
+        if (state === "running") return accent
+        return warning
+    }
 
     function levelColor(level) {
         if (level === "error") return danger

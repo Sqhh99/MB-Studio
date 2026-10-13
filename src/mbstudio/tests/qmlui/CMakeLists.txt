@@ -10,7 +10,7 @@ find_package(Qt6 COMPONENTS Test REQUIRED)
 add_executable(mbstudio_qmlui_test QmlUiTest.cpp)
 set_target_properties(mbstudio_qmlui_test PROPERTIES AUTOMOC ON)
 target_link_libraries(mbstudio_qmlui_test PRIVATE
-  mbstudio_qmlui_core mbstudio_mbsystem_core Qt6::Test)
+  mbstudio_qmlui_core mbstudio_mbsystem_core mbstudio_project_core Qt6::Test)
 target_compile_definitions(mbstudio_qmlui_test PRIVATE
   MBSTUDIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   MBSTUDIO_TOOL_DIR="${CMAKE_BINARY_DIR}/src/utilities"

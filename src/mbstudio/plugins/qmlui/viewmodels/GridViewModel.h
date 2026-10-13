@@ -35,6 +35,17 @@ class GridViewModel : public QObject {
   Q_PROPERTY(QVariantList legend READ legend NOTIFY optionsChanged)
   Q_PROPERTY(int imageWidth READ imageWidth NOTIFY imageChanged)
   Q_PROPERTY(int imageHeight READ imageHeight NOTIFY imageChanged)
+  // valid / empty node counts, emptyPercent, mean, stddev of the main grid
+  Q_PROPERTY(QVariantMap statistics READ statistics NOTIFY stateChanged)
+  // what is shown: 0 the grid, 1 data count per cell (_num), 2 standard deviation (_sd)
+  Q_PROPERTY(int layer READ layer WRITE setLayer NOTIFY optionsChanged)
+  Q_PROPERTY(bool hasQualityGrids READ hasQualityGrids NOTIFY stateChanged)
+  // hatch cells that hold a value but no data (filled by interpolation)
+  Q_PROPERTY(bool showInterpolated READ showInterpolated WRITE setShowInterpolated NOTIFY optionsChanged)
+  Q_PROPERTY(double interpolatedPercent READ interpolatedPercent NOTIFY stateChanged)
+  Q_PROPERTY(bool autoRange READ autoRange WRITE setAutoRange NOTIFY optionsChanged)
+  Q_PROPERTY(double rangeMin READ rangeMin WRITE setRangeMin NOTIFY optionsChanged)
+  Q_PROPERTY(double rangeMax READ rangeMax WRITE setRangeMax NOTIFY optionsChanged)
 
  public:
   GridViewModel(std::shared_ptr<IGridService> grids, std::shared_ptr<IGridRenderService> renderer,
@@ -62,8 +73,22 @@ class GridViewModel : public QObject {
   QVariantList legend() const;  // [{position: 0..1, color: "#rrggbb"}, ...]
   int imageWidth() const;
   int imageHeight() const;
+  QVariantMap statistics() const { return statistics_; }
+  int layer() const { return layer_; }
+  void setLayer(int value);
+  bool hasQualityGrids() const { return num_ != nullptr || sd_ != nullptr; }
+  bool showInterpolated() const { return showInterpolated_; }
+  void setShowInterpolated(bool value);
+  double interpolatedPercent() const { return interpolatedPercent_; }
+  bool autoRange() const { return options_.autoRange; }
+  void setAutoRange(bool value);
+  double rangeMin() const { return options_.zmin; }
+  void setRangeMin(double value);
+  double rangeMax() const { return options_.zmax; }
+  void setRangeMax(double value);
 
   Q_INVOKABLE void load(const QString &path);
+  Q_INVOKABLE void reload() { load(path_); }
   Q_INVOKABLE void clear();
   // Value under a point given in normalised image coordinates (0..1).
   Q_INVOKABLE QVariantMap probe(double u, double v) const;
@@ -77,13 +102,26 @@ class GridViewModel : public QObject {
   void imageChanged();
 
  private:
+  struct Loaded {
+    GridLoadResult main;
+    std::shared_ptr<const Grid> num, sd;
+    GridStatistics statistics;
+    long long interpolated = 0;
+  };
   void scheduleRender();
   void startRender();
+  std::shared_ptr<const Grid> displayed() const;
   std::shared_ptr<IGridService> grids_;
   std::shared_ptr<IGridRenderService> renderer_;
   std::shared_ptr<const Grid> grid_;
+  std::shared_ptr<const Grid> num_;
+  std::shared_ptr<const Grid> sd_;
   RenderOptions options_;
-  QFutureWatcher<GridLoadResult> loadWatcher_;
+  int layer_ = 0;
+  bool showInterpolated_ = true;
+  double interpolatedPercent_ = 0.0;
+  QVariantMap statistics_;
+  QFutureWatcher<Loaded> loadWatcher_;
   QFutureWatcher<QImage> renderWatcher_;
   QTimer renderTimer_;
   bool loading_ = false;

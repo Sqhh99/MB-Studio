@@ -8,7 +8,6 @@ import "../components"
 
 Item {
     id: page
-    signal openRequested()
     readonly property var grid: App.grid
     readonly property var info: grid.info
     property var probe: ({})
@@ -28,7 +27,7 @@ Item {
         message: grid.error !== "" ? grid.error
                  : qsTr("Open a GMT grid (.grd, .nc) such as the output of mbgrid or mbmosaic to display it as colour shaded relief.")
         actionText: qsTr("Open grid…")
-        onAction: page.openRequested()
+        onAction: App.trigger("ui:openFile")
     }
 
     RowLayout {
@@ -132,6 +131,9 @@ Item {
                           : (info.geographic ? "lon " : "x ") + fmt(page.probe.x, 6) + "   "
                             + (info.geographic ? "lat " : "y ") + fmt(page.probe.y, 6) + "   z "
                             + (page.probe.valid ? fmt(page.probe.z, 2) + " " + (info.zUnits || "") : qsTr("no data"))
+                            + (page.probe.count !== undefined ? "   " + qsTr("n %1").arg(page.probe.count) : "")
+                            + (page.probe.stddev !== undefined ? "   " + qsTr("σ %1").arg(fmt(page.probe.stddev, 2)) : "")
+                            + (page.probe.interpolated === true ? "   " + qsTr("(interpolated)") : "")
                 }
             }
 
@@ -222,9 +224,34 @@ Item {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: fmt(info.zmin, 1); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
+                            Text { text: fmt(grid.autoRange ? info.zmin : grid.rangeMin, 1); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
                             Item { Layout.fillWidth: true }
-                            Text { text: fmt(info.zmax, 1) + " " + (info.zUnits || ""); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
+                            Text { text: fmt(grid.autoRange ? info.zmax : grid.rangeMax, 1) + " " + (info.zUnits || ""); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
+                        }
+                        Switch {
+                            text: qsTr("Colour range from the data")
+                            checked: grid.autoRange
+                            onToggled: grid.autoRange = checked
+                        }
+                        RowLayout {
+                            visible: !grid.autoRange
+                            Layout.fillWidth: true
+                            spacing: 6
+                            TextField {
+                                Layout.fillWidth: true
+                                text: fmt(grid.rangeMin, 1)
+                                selectByMouse: true
+                                validator: RegularExpressionValidator { regularExpression: /-?\d{0,7}([.,]\d{0,4})?/ }
+                                onEditingFinished: grid.rangeMin = Number(text.replace(",", "."))
+                            }
+                            Text { text: "…"; color: Theme.textMuted }
+                            TextField {
+                                Layout.fillWidth: true
+                                text: fmt(grid.rangeMax, 1)
+                                selectByMouse: true
+                                validator: RegularExpressionValidator { regularExpression: /-?\d{0,7}([.,]\d{0,4})?/ }
+                                onEditingFinished: grid.rangeMax = Number(text.replace(",", "."))
+                            }
                         }
                         Switch {
                             text: qsTr("Hillshade")
@@ -258,6 +285,57 @@ Item {
                     }
                 }
 
+                // coverage and quality: measured, interpolated and empty cells
+                Card {
+                    Layout.fillWidth: true
+                    implicitHeight: quality.implicitHeight + 36
+                    ColumnLayout {
+                        id: quality
+                        anchors.fill: parent
+                        spacing: 6
+                        SectionTitle { text: qsTr("Coverage and quality"); iconPath: Icons.check }
+                        PropertyRow {
+                            Layout.fillWidth: true
+                            label: qsTr("Empty cells")
+                            value: grid.statistics.emptyPercent !== undefined ? fmt(grid.statistics.emptyPercent, 1) + " %" : ""
+                        }
+                        PropertyRow {
+                            Layout.fillWidth: true
+                            visible: grid.hasQualityGrids
+                            label: qsTr("Interpolated")
+                            value: fmt(grid.interpolatedPercent, 1) + " %"
+                        }
+                        PropertyRow {
+                            Layout.fillWidth: true
+                            label: qsTr("Mean ± σ")
+                            value: grid.statistics.mean !== undefined ? fmt(grid.statistics.mean, 2) + " ± " + fmt(grid.statistics.stddev, 2) : ""
+                        }
+                        Text {
+                            visible: !grid.hasQualityGrids
+                            Layout.fillWidth: true
+                            text: qsTr("Grid with quality grids (mbgrid -M) to see data counts, standard deviations and interpolated cells.")
+                            color: Theme.textFaint
+                            font.pixelSize: Theme.fontSmall
+                            wrapMode: Text.WordWrap
+                        }
+                        Text { visible: grid.hasQualityGrids; text: qsTr("Show"); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
+                        ComboBox {
+                            objectName: "gridLayer"
+                            visible: grid.hasQualityGrids
+                            Layout.fillWidth: true
+                            model: [qsTr("Surface"), qsTr("Data count per cell"), qsTr("Standard deviation")]
+                            currentIndex: grid.layer
+                            onActivated: (index) => grid.layer = index
+                        }
+                        Switch {
+                            visible: grid.hasQualityGrids && grid.layer === 0
+                            text: qsTr("Hatch interpolated cells")
+                            checked: grid.showInterpolated
+                            onToggled: grid.showInterpolated = checked
+                        }
+                    }
+                }
+
                 Card {
                     Layout.fillWidth: true
                     implicitHeight: extent.implicitHeight + 36
@@ -282,7 +360,16 @@ Item {
                         }
                         RowLayout {
                             Layout.topMargin: 6
-                            Button { text: qsTr("Open another…"); flat: true; onClicked: page.openRequested() }
+                            Button {
+                                text: qsTr("Add to project")
+                                flat: true
+                                visible: App.project.isOpen
+                                onClicked: {
+                                    App.project.addGrid(grid.path)
+                                    App.openWorkspace("map")
+                                }
+                            }
+                            Button { text: qsTr("Open another…"); flat: true; onClicked: App.trigger("ui:openFile") }
                             Item { Layout.fillWidth: true }
                             IconButton { iconPath: Icons.folderOpen; tip: qsTr("Show in folder"); onClicked: App.showInFolder(grid.path) }
                         }

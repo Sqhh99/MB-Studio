@@ -11,11 +11,13 @@ Rectangle {
     color: Theme.surface
     border.color: Theme.border
     readonly property var log: App.log
+    property bool showHeader: true
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         RowLayout {
+            visible: root.showHeader
             Layout.fillWidth: true
             Layout.leftMargin: 14
             Layout.rightMargin: 6
@@ -25,7 +27,7 @@ Rectangle {
             IconButton { iconPath: Icons.copy; tip: qsTr("Copy log"); onClicked: App.copyToClipboard(log.text()) }
             IconButton { iconPath: Icons.sweep; tip: qsTr("Clear log"); onClicked: log.clear() }
         }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+        Rectangle { visible: root.showHeader; Layout.fillWidth: true; height: 1; color: Theme.border }
         ListView {
             id: list
             Layout.fillWidth: true

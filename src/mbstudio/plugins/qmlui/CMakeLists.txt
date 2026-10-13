@@ -16,11 +16,17 @@ add_library(mbstudio_qmlui_core OBJECT
   viewmodels/AppController.cpp
   viewmodels/FormatListModel.cpp
   viewmodels/GridViewModel.cpp
+  viewmodels/JobListModel.cpp
   viewmodels/LogModel.cpp
+  viewmodels/MapView.cpp
+  viewmodels/ProcessingViewModel.cpp
+  viewmodels/ProjectViewModel.cpp
   viewmodels/SwathViewModel.cpp
   viewmodels/ToolsViewModel.cpp
   viewmodels/TrackPlot.cpp
   viewmodels/Translator.cpp
+  viewmodels/VariantListModel.cpp
+  viewmodels/WorkspaceModel.cpp
   qmlui.qrc)
 set_target_properties(mbstudio_qmlui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_features(mbstudio_qmlui_core PUBLIC cxx_std_17)
