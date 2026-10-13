@@ -9,19 +9,12 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 vcpkg_download_distfile(ARCHIVE
     URLS "https://github.com/GenericMappingTools/gmt/releases/download/${VERSION}/gmt-${VERSION}-src.tar.gz"
     FILENAME "gmt-${VERSION}-src.tar.gz"
-    SHA512 89a483b26d1b7ab3b561d9f9c5cc4cbf203e465a7c29249f09bd015a9675c51791715b814388bfe5cf393e26d6512d57361a58ea7b97c81baf0864ffc92b68ae
+    SHA512 9c151ecd4521c6a03c7fb89fb0ca116308a48df135926f1e8e09c8b316a6b862c059a3a995bfbfea5f41f55a5fb0551faee2c23ac9660dd6f515f20e898fc65a
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH
     ARCHIVE "${ARCHIVE}"
 )
-
-# GMT maps stat to _stati64 on Windows but never emits HAVE__FSTATI64 into
-# gmt_config.h, so fstat() is called with a struct _stati64 - an error with
-# GCC 14+ and a struct layout mismatch. Map fstat to _fstati64 as well.
-vcpkg_replace_string("${SOURCE_PATH}/src/gmt_notposix.h"
-    "#ifdef HAVE__FSTATI64"
-    "#if defined HAVE__FSTATI64 || defined HAVE__STATI64")
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"

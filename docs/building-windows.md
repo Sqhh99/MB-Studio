@@ -23,7 +23,7 @@ steps on every pull request.
 `vcpkg.json` declares NetCDF, HDF5, PROJ, GDAL, FFTW and GMT, plus Qt 6
 (`qtbase`, `qtdeclarative`) for the user interface (`gui` feature, on by
 default). GMT is not in the vcpkg registry; `vcpkg-overlays/ports/gmt` builds
-it from the official 6.6.0 sources. The custom triplet
+it from the official 6.7.0 sources. The custom triplet
 `vcpkg-overlays/triplets/x64-mingw-mbstudio.cmake` selects MinGW-w64, shared
 libraries and release-only builds.
 

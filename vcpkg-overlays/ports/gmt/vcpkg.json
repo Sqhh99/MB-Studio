@@ -1,6 +1,6 @@
 {
   "name": "gmt",
-  "version": "6.6.0",
+  "version": "6.7.0",
   "description": "The Generic Mapping Tools (GMT) library and gmt driver, built for MB-Studio",
   "homepage": "https://www.generic-mapping-tools.org",
   "license": "LGPL-3.0-or-later",
