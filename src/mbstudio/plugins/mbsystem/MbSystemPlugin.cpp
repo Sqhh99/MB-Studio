@@ -36,6 +36,8 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   auto render = std::make_shared<GridRenderService>();
   auto tools = std::make_shared<ToolService>(kernel.config().toolDirectories, &kernel.events());
   auto help = std::make_shared<HelpService>();
+  auto processing = std::make_shared<ProcessingService>();
+  auto jobs = std::make_shared<JobService>(tools, &kernel.events());
 
   ServiceRegistry &services = kernel.services();
   services.provide<IFormatService>(formats, owner);
@@ -44,6 +46,8 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   services.provide<IGridRenderService>(render, owner);
   services.provide<IToolService>(tools, owner);
   services.provide<IHelpService>(help, owner);
+  services.provide<IProcessingService>(processing, owner);
+  services.provide<IJobService>(jobs, owner);
 
   CommandRegistry &commands = kernel.commands();
   commands.add({"formats.list", "List formats", "List the swath data formats supported by MB-System", owner},
@@ -128,6 +132,55 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
                                                            {"output", output}});
                  r.ok = result.exitCode == 0;
                  return r;
+               });
+
+  commands.add({"grid.stats", "Grid statistics", "Valid and empty (NaN) nodes of a GMT grid (path=...)", owner},
+               [grids](const ValueMap &args) {
+                 const GridLoadResult r = grids->load(getString(args, "path"));
+                 if (!r.ok)
+                   return CommandResult::failure(r.error);
+                 const GridStatistics st = grids->statistics(r.grid);
+                 return CommandResult::success({{"nodes", static_cast<std::int64_t>(st.nodes)},
+                                                {"valid", static_cast<std::int64_t>(st.valid)},
+                                                {"empty", static_cast<std::int64_t>(st.empty)},
+                                                {"emptyRatio", st.emptyRatio},
+                                                {"mean", st.mean},
+                                                {"stddev", st.stddev}});
+               });
+  commands.add({"processing.grid", "Gridding command",
+                "mbgrid arguments for typed parameters (datalist=..., output=..., spacing=25, algorithm=1, clip=0)",
+                owner},
+               [processing](const ValueMap &args) {
+                 GridParameters p;
+                 p.outputRoot = getString(args, "output");
+                 p.spacing = getDouble(args, "spacing", p.spacing);
+                 p.dataType = static_cast<int>(getInt(args, "type", p.dataType));
+                 p.algorithm = static_cast<int>(getInt(args, "algorithm", p.algorithm));
+                 p.clip = static_cast<int>(getInt(args, "clip", p.clip));
+                 p.projection = getString(args, "projection");
+                 const CommandPlan plan = processing->grid(getString(args, "datalist"), p);
+                 if (!plan.ok)
+                   return CommandResult::failure(plan.error);
+                 ValueMap data;
+                 const auto lines = plan.commandLines();
+                 data["command"] = lines.empty() ? std::string() : lines.front();
+                 data["outputs"] = static_cast<std::int64_t>(plan.outputs.size());
+                 for (std::size_t i = 0; i < plan.outputs.size(); i++)
+                   data["output." + std::to_string(i)] = plan.outputs[i];
+                 return CommandResult::success(data);
+               });
+  commands.add({"jobs.list", "Jobs", "Background jobs and their state", owner}, [jobs](const ValueMap &) {
+    ValueMap data;
+    const auto list = jobs->jobs();
+    data["count"] = static_cast<std::int64_t>(list.size());
+    for (const auto &j : list)
+      data["job." + std::to_string(j.id)] = std::string(jobStateName(j.state)) + " " + j.title;
+    return CommandResult::success(data);
+  });
+  commands.add({"jobs.cancel", "Cancel job", "Cancel a queued or running job (id=...)", owner},
+               [jobs](const ValueMap &args) {
+                 return jobs->cancel(getInt(args, "id")) ? CommandResult::success()
+                                                         : CommandResult::failure("no such running job");
                });
 
   commands.add({"help.programs", "Help pages", "Programs with help pages and the help languages", owner},

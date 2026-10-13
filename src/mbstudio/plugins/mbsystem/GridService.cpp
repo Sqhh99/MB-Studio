@@ -227,4 +227,24 @@ GridLoadResult GridService::load(const std::string &path) const {
   return result;
 }
 
+GridStatistics GridService::statistics(const Grid &grid) const {
+  GridStatistics st;
+  st.nodes = static_cast<long long>(grid.z.size());
+  double sum = 0.0, sum2 = 0.0;
+  for (const float z : grid.z) {
+    if (std::isfinite(z)) {
+      st.valid++;
+      sum += z;
+      sum2 += static_cast<double>(z) * z;
+    }
+  }
+  st.empty = st.nodes - st.valid;
+  st.emptyRatio = st.nodes > 0 ? static_cast<double>(st.empty) / static_cast<double>(st.nodes) : 0.0;
+  if (st.valid > 0) {
+    st.mean = sum / static_cast<double>(st.valid);
+    st.stddev = std::sqrt(std::max(0.0, sum2 / static_cast<double>(st.valid) - st.mean * st.mean));
+  }
+  return st;
+}
+
 }  // namespace mbstudio::mbsystem

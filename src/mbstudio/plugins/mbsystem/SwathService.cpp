@@ -3,8 +3,11 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <locale>
+#include <sstream>
 
 #include "MbioServices.h"
+#include "mbstudio/platform/Paths.h"
 
 extern "C" {
 #include "mb_define.h"
@@ -182,6 +185,44 @@ SwathSummary SwathService::inspect(const std::string &path, int format, std::siz
   if (summary.error.empty())
     summary.ok = true;
   return summary;
+}
+
+std::vector<TrackPoint> SwathService::parseFnv(const std::string &text, std::size_t maxPoints) {
+  // yyyy mm dd hh mm ss.ssssss time_d lon lat heading speed sensordepth ...
+  std::vector<TrackPoint> track;
+  std::istringstream lines(text);
+  std::string line;
+  while (std::getline(lines, line)) {
+    if (line.empty() || line[0] == '#')
+      continue;
+    std::istringstream fields(line);
+    fields.imbue(std::locale::classic());
+    double v[9];
+    int n = 0;
+    while (n < 9 && (fields >> v[n]))
+      n++;
+    if (n < 9 || !std::isfinite(v[7]) || !std::isfinite(v[8]) || std::fabs(v[8]) > 90.0)
+      continue;
+    if (v[7] == 0.0 && v[8] == 0.0)
+      continue;  // no navigation fix
+    track.push_back(TrackPoint{v[7], v[8], v[6], 0.0});
+  }
+  if (maxPoints >= 2 && track.size() > maxPoints) {
+    std::vector<TrackPoint> decimated;
+    decimated.reserve(maxPoints);
+    const double step = static_cast<double>(track.size() - 1) / static_cast<double>(maxPoints - 1);
+    for (std::size_t i = 0; i < maxPoints; i++)
+      decimated.push_back(track[static_cast<std::size_t>(std::lround(i * step))]);
+    track.swap(decimated);
+  }
+  return track;
+}
+
+std::vector<TrackPoint> SwathService::readNavigation(const std::string &fnvPath, std::size_t maxPoints) const {
+  std::string text;
+  if (!platform::readTextFile(fnvPath, text))
+    return {};
+  return parseFnv(text, maxPoints);
 }
 
 }  // namespace mbstudio::mbsystem

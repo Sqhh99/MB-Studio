@@ -44,6 +44,9 @@ class ISwathService {
   // maxTrackPoints navigation points are returned.
   virtual SwathSummary inspect(const std::string &path, int format, std::size_t maxTrackPoints,
                                const std::atomic<bool> *cancel = nullptr) const = 0;
+  // Navigation from a ".fnv" fast navigation file (written by mbdatalist -O
+  // or mbprocess), decimated to at most maxPoints; empty if unreadable.
+  virtual std::vector<TrackPoint> readNavigation(const std::string &fnvPath, std::size_t maxPoints) const = 0;
 };
 
 }  // namespace mbstudio

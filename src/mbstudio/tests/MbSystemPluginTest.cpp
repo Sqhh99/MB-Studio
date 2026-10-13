@@ -2,6 +2,9 @@
 // programs (formats, swath inspection, grids, rendering, tools) and of the
 // plugin through the kernel command interface.
 #include <atomic>
+#include <chrono>
+#include <mutex>
+#include <thread>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -186,10 +189,10 @@ TEST(ToolService, CatalogIsCompleteAndInstalled) {
   EXPECT_FALSE(tools.categories().empty());
 }
 
-TEST(ToolService, RunsProgramsAndPublishesJobEvents) {
+TEST(ToolService, RunsProgramsAndPublishesToolEvents) {
   EventBus events;
   std::vector<std::string> topics;
-  events.subscribe("job.*", [&](const Event &e) { topics.push_back(e.topic); });
+  events.subscribe("tool.*", [&](const Event &e) { topics.push_back(e.topic); });
   ToolService tools(toolDirs(), &events);
   std::string output;
   const auto r = tools.run("mbinfo", {"-I" + testData()}, std::string(),
@@ -198,8 +201,8 @@ TEST(ToolService, RunsProgramsAndPublishesJobEvents) {
   EXPECT_EQ(0, r.exitCode);
   EXPECT_NE(std::string::npos, output.find("MBIO Data Format ID:  21"));
   ASSERT_GE(topics.size(), 3u);
-  EXPECT_EQ("job.started", topics.front());
-  EXPECT_EQ("job.finished", topics.back());
+  EXPECT_EQ("tool.started", topics.front());
+  EXPECT_EQ("tool.finished", topics.back());
   EXPECT_FALSE(tools.run("not-a-tool", {}, std::string(), nullptr).started);
 }
 
@@ -228,6 +231,287 @@ TEST(ToolService, GridsSwathDataWithMbgrid) {
   EXPECT_GT(g.grid.zmin, -470.0);  // mbgrid writes topography (negative depth)
   GridRenderService render;
   EXPECT_EQ(47 * 31, static_cast<int>(render.render(g.grid, RenderOptions()).pixels.size()));
+}
+
+TEST(ProcessingService, GridArgumentsAreExplicit) {
+  ProcessingService processing;
+  GridParameters p;
+  p.outputRoot = "/data/survey/products/bathy";
+  p.spacing = 10;
+  p.algorithm = 2;
+  p.clip = 3;
+  p.clipMode = 1;
+  p.projection = "U";
+  const CommandPlan plan = processing.grid("/data/survey/datalist.mb-1", p);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_EQ(1u, plan.steps.size());
+  EXPECT_EQ("mbgrid", plan.steps[0].tool);
+  EXPECT_EQ((std::vector<std::string>{"-I/data/survey/datalist.mb-1", "-O/data/survey/products/bathy", "-A1",
+                                      "-E10/10/meters!", "-F2", "-C3/1", "-JU", "-M", "-N", "-V"}),
+            plan.steps[0].arguments);
+  EXPECT_EQ((std::vector<std::string>{"/data/survey/products/bathy.grd", "/data/survey/products/bathy_num.grd",
+                                      "/data/survey/products/bathy_sd.grd"}),
+            plan.outputs);
+  EXPECT_FALSE(plan.warnings.empty());  // interpolation is not measured data
+
+  // minimum filter: no quality grids, threshold appended
+  p.algorithm = 3;
+  p.threshold = 0.5;
+  p.clip = 0;
+  p.projection.clear();
+  p.bounds = GeoBounds{-124.507, -124.496, 40.835, 40.842};
+  const CommandPlan min = processing.grid("dl.mb-1", p);
+  ASSERT_TRUE(min.ok);
+  EXPECT_EQ((std::vector<std::string>{"-Idl.mb-1", "-O/data/survey/products/bathy", "-A1", "-E10/10/meters!",
+                                      "-R-124.507/-124.496/40.835/40.842", "-F3/0.5", "-N", "-V"}),
+            min.steps[0].arguments);
+  EXPECT_EQ(1u, min.outputs.size());
+
+  p.algorithm = 5;
+  p.dataType = 4;
+  EXPECT_FALSE(processing.grid("dl.mb-1", p).ok);  // footprint gridding of sidescan
+  p.outputRoot.clear();
+  EXPECT_FALSE(processing.grid("dl.mb-1", p).ok);
+
+  GridParameters e;
+  e.spacing = 100;
+  const GridEstimate est = processing.estimateGrid(e, GeoBounds{0.0, 1.0, 0.0, 1.0});
+  EXPECT_NEAR(1115, est.nx, 3);
+  EXPECT_NEAR(1115, est.ny, 3);
+  EXPECT_GT(est.megabytes, 1.0);
+}
+
+TEST(ProcessingService, CleaningCorrectionsAndExports) {
+  ProcessingService processing;
+  CleanParameters c;
+  c.outerBeams = 5;
+  c.useDepthRange = true;
+  c.depthMin = 100;
+  c.depthMax = 6000;
+  c.areaClean = true;
+  CommandPlan plan = processing.clean("dl.mb-1", c);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_EQ(2u, plan.steps.size());
+  EXPECT_EQ((std::vector<std::string>{"-Idl.mb-1", "-M1", "-C1/0", "-B100/6000", "-X5", "-V"}),
+            plan.steps[0].arguments);
+  EXPECT_EQ("mbareaclean", plan.steps[1].tool);
+  c = CleanParameters();
+  c.useSlope = false;
+  EXPECT_FALSE(processing.clean("dl.mb-1", c).ok);
+
+  CorrectionParameters k;
+  k.svpMode = 2;
+  k.longitude = -124.4;
+  k.latitude = 40.8;
+  k.useRollBias = true;
+  k.rollBias = -0.25;
+  k.useDraft = true;
+  k.draft = 5.5;
+  k.workingDirectory = "/w";
+  plan = processing.corrections("/d/dl.mb-1", k);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_EQ(2u, plan.steps.size());
+  EXPECT_EQ("mblevitus", plan.steps[0].tool);
+  EXPECT_EQ("-R-124/41", plan.steps[0].arguments[0]);
+  EXPECT_EQ("mbset", plan.steps[1].tool);
+  EXPECT_EQ((std::vector<std::string>{"-I/d/dl.mb-1", "-PSVPFILE:" + platform::joinPath("/w", "levitus.svp"),
+                                      "-PROLLBIAS:-0.25", "-PDRAFT:5.5", "-V"}),
+            plan.steps[1].arguments);
+  EXPECT_FALSE(processing.corrections("dl.mb-1", CorrectionParameters()).ok);
+
+  ProcessParameters pp;
+  pp.threads = 4;
+  pp.processedDatalist = "dlp.mb-1";
+  plan = processing.process("dl.mb-1", pp);
+  ASSERT_EQ(2u, plan.steps.size());
+  EXPECT_EQ((std::vector<std::string>{"-Idl.mb-1", "-C4"}), plan.steps[0].arguments);
+  EXPECT_TRUE(plan.steps[1].allowFailure);
+
+  ExportParameters x;
+  x.kind = "geotiff";
+  x.output = "/o/bathy.tif";
+  plan = processing.exportGrid("/o/bathy.grd", x);
+  ASSERT_TRUE(plan.ok);
+  EXPECT_EQ((std::vector<std::string>{"grdconvert", "/o/bathy.grd", "/o/bathy.tif=gd:GTiff"}), plan.steps[0].arguments);
+  x.kind = "las";
+  x.output = "/o/points.las";
+  plan = processing.exportSoundings("dlp.mb-1", x);
+  ASSERT_TRUE(plan.ok);
+  EXPECT_EQ("mbswath2las", plan.steps[0].tool);
+  x.kind = "pdf";
+  EXPECT_FALSE(processing.exportGrid("g.grd", x).ok);
+
+  MosaicParameters m;
+  m.outputRoot = "/o/ss";
+  m.prioritySource = 3;
+  m.angleCorrection = true;
+  m.processedDatalist = "dlp.mb-1";
+  plan = processing.mosaic("dl.mb-1", m);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_EQ(3u, plan.steps.size());
+  EXPECT_EQ("mbbackangle", plan.steps[0].tool);
+  EXPECT_EQ("mbmosaic", plan.steps[2].tool);
+  EXPECT_EQ("-Idlp.mb-1", plan.steps[2].arguments[0]);
+}
+
+TEST(ProcessingService, DatalistsAndFileNames) {
+  ProcessingService processing;
+  const std::string base = scratch("project");
+  platform::makeDirectories(platform::joinPath(base, "datalists"));
+  std::string text, error;
+  const std::vector<DatalistEntry> entries = {{platform::joinPath(base, "raw/0001_line.all"), 58, 1.0},
+                                              {platform::joinPath(base, "raw/0002_line.all"), 58, 1.0}};
+  ASSERT_TRUE(processing.datalistText(entries, platform::joinPath(base, "datalists"), false, text, error)) << error;
+  EXPECT_NE(std::string::npos, text.find("../raw/0001_line.all 58 1\n"));
+  ASSERT_TRUE(processing.datalistText(entries, platform::joinPath(base, "datalists"), true, text, error));
+  EXPECT_NE(std::string::npos, text.find("$PROCESSED\n"));
+  EXPECT_FALSE(processing.datalistText({{"/elsewhere/with space/a.all", 58, 1.0}}, base, false, text, error));
+  EXPECT_NE(std::string::npos, error.find("spaces"));
+  EXPECT_FALSE(processing.datalistText({{"/x/a.xyz", 0, 1.0}}, base, false, text, error));
+  EXPECT_NE(std::string::npos, processing.processedDatalistText("datalist.mb-1").find("datalist.mb-1 -1 1"));
+
+  EXPECT_EQ(59, processing.preprocessOutputFormat(58));
+  EXPECT_EQ(21, processing.preprocessOutputFormat(21));
+  EXPECT_TRUE(processing.recommendPreprocess(58));
+  EXPECT_FALSE(processing.recommendPreprocess(21));
+  EXPECT_EQ("0000_20111219_154640_METEOR_EM122.mb59",
+            processing.preprocessOutputName("D:/s/0000_20111219_154640_METEOR_EM122.all", 58));
+  EXPECT_EQ("liner.mb59", processing.preprocessOutputName("/s/line.mb59", 59));
+  EXPECT_EQ("/s/linep.mb59", processing.processedName("/s/line.mb59"));
+  CommandPlan pre = processing.preprocess("dl.mb-1", PreprocessParameters());
+  EXPECT_FALSE(pre.ok);
+  PreprocessParameters pp;
+  pp.outputDirectory = "/p/processed";
+  pre = processing.preprocess("dl.mb-1", pp);
+  ASSERT_TRUE(pre.ok) << pre.error;
+  EXPECT_EQ("--output-directory=/p/processed", pre.steps[0].arguments[1]);
+  pp.outputDirectory = "/p/with space";
+  EXPECT_FALSE(processing.preprocess("dl.mb-1", pp).ok);
+}
+
+TEST(SwathService, ParsesFastNavigation) {
+  const std::string fnv =
+      "2011 12 19 15 46 40.123000\t1324309600.123000\t-25.1234567890\t37.0000000000\t90.0\t10.0\t5.0\n"
+      "2011 12 19 15 46 41.123000\t1324309601.123000\t-25.1230000000\t37.0010000000\t90.0\t10.0\t5.0\n"
+      "garbage line\n"
+      "2011 12 19 15 46 42.123000\t1324309602.123000\t0.0\t0.0\t90.0\t10.0\t5.0\n"
+      "2011 12 19 15 46 43.123000\t1324309603.123000\t-25.1220000000\t37.0020000000\t90.0\t10.0\t5.0\n";
+  auto track = SwathService::parseFnv(fnv, 100);
+  ASSERT_EQ(3u, track.size());
+  EXPECT_NEAR(-25.1234567890, track[0].lon, 1e-9);
+  EXPECT_NEAR(37.002, track[2].lat, 1e-9);
+  EXPECT_NEAR(1324309600.123, track[0].time, 1e-3);
+  EXPECT_EQ(2u, SwathService::parseFnv(fnv, 2).size());
+  SwathService swath(nullptr);
+  EXPECT_TRUE(swath.readNavigation(scratch("missing.fnv"), 10).empty());
+}
+
+TEST(GridService, Statistics) {
+  GridService grids;
+  const GridLoadResult r = grids.load(writeTestGrid());
+  ASSERT_TRUE(r.ok) << r.error;
+  const GridStatistics st = grids.statistics(r.grid);
+  EXPECT_EQ(12, st.nodes);
+  EXPECT_EQ(11, st.valid);
+  EXPECT_EQ(1, st.empty);
+  EXPECT_NEAR(1.0 / 12.0, st.emptyRatio, 1e-9);
+}
+
+TEST(JobService, RunsStepsCancelsAndRetries) {
+  EventBus events;
+  std::vector<std::string> topics;
+  std::mutex topicsMutex;
+  events.subscribe("job.*", [&](const Event &e) {
+    std::lock_guard<std::mutex> lock(topicsMutex);
+    topics.push_back(e.topic);
+  });
+  auto tools = std::make_shared<ToolService>(toolDirs(), &events);
+  JobService jobs(tools, &events, 1);
+  const std::string dir = scratch("jobs dir");
+
+  // a program step and an action step
+  bool actionRan = false;
+  JobSpec spec;
+  spec.title = "Inspect";
+  spec.kind = "test";
+  spec.workingDirectory = dir;
+  JobStep info;
+  info.title = "mbinfo";
+  info.tool = "mbinfo";
+  info.arguments = {"-I" + testData()};
+  spec.steps.push_back(info);
+  JobStep action;
+  action.title = "action";
+  action.action = [&actionRan](std::string &log) {
+    actionRan = true;
+    log = "action done";
+    return true;
+  };
+  spec.steps.push_back(action);
+  std::string error;
+  const auto id = jobs.submit(spec, &error);
+  ASSERT_NE(0, id) << error;
+  ASSERT_TRUE(jobs.wait(id, 60000));
+  JobInfo done;
+  ASSERT_TRUE(jobs.job(id, done));
+  EXPECT_EQ(JobState::Completed, done.state) << done.error;
+  EXPECT_TRUE(actionRan);
+  EXPECT_EQ(1u, done.commandLines.size());
+  EXPECT_NE(std::string::npos, jobs.log(id).find("MBIO Data Format ID:  21"));
+  EXPECT_NE(std::string::npos, jobs.log(id).find("action done"));
+  EXPECT_TRUE(platform::fileExists(done.logPath));
+  {
+    std::lock_guard<std::mutex> lock(topicsMutex);
+    ASSERT_FALSE(topics.empty());
+    EXPECT_EQ("job.queued", topics.front());
+    EXPECT_EQ("job.finished", topics.back());
+  }
+
+  // a failing program: actionable error with the exit code
+  JobSpec bad = spec;
+  bad.steps = {info};
+  bad.steps[0].arguments = {"-I" + scratch("does-not-exist.mb21")};
+  const auto badId = jobs.submit(bad);
+  ASSERT_TRUE(jobs.wait(badId, 60000));
+  ASSERT_TRUE(jobs.job(badId, done));
+  EXPECT_EQ(JobState::Failed, done.state);
+  EXPECT_NE(std::string::npos, done.error.find("mbinfo"));
+  const auto retried = jobs.retry(badId);
+  ASSERT_NE(0, retried);
+  ASSERT_TRUE(jobs.wait(retried, 60000));
+  ASSERT_TRUE(jobs.job(retried, done));
+  EXPECT_EQ(badId, done.retryOf);
+
+  // cancel a queued job while another one blocks the only worker
+  std::atomic<bool> release{false};
+  JobSpec blocking;
+  blocking.workingDirectory = dir;
+  JobStep wait;
+  wait.title = "wait";
+  wait.action = [&release](std::string &) {
+    while (!release.load())
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    return true;
+  };
+  blocking.steps = {wait};
+  const auto first = jobs.submit(blocking);
+  const auto second = jobs.submit(spec);
+  EXPECT_TRUE(jobs.cancel(second));
+  release = true;
+  ASSERT_TRUE(jobs.wait(first, 60000));
+  ASSERT_TRUE(jobs.wait(second, 1000));
+  ASSERT_TRUE(jobs.job(second, done));
+  EXPECT_EQ(JobState::Cancelled, done.state);
+  EXPECT_FALSE(jobs.cancel(second));
+
+  EXPECT_EQ(0, jobs.submit(JobSpec(), &error));
+  JobSpec unknown;
+  JobStep u;
+  u.tool = "not-a-program";
+  unknown.steps = {u};
+  EXPECT_EQ(0, jobs.submit(unknown, &error));
+  jobs.clearFinished();
+  EXPECT_TRUE(jobs.jobs().empty());
 }
 
 TEST(HelpService, EveryProgramHasPagesInAllLanguages) {
@@ -271,6 +555,8 @@ TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   ASSERT_EQ(1u, kernel.start());
   EXPECT_TRUE(kernel.services().has<ISwathService>());
   EXPECT_TRUE(kernel.services().has<IToolService>());
+  EXPECT_TRUE(kernel.services().has<IJobService>());
+  EXPECT_TRUE(kernel.services().has<IProcessingService>());
 
   auto r = kernel.commands().execute("swath.inspect", {{"path", testData()}});
   ASSERT_TRUE(r.ok) << r.message;
@@ -282,6 +568,14 @@ TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   EXPECT_NE(std::string::npos, getString(r.data, "output").find("MBF_HSATLRAW"));
   r = kernel.commands().execute("grid.info", {{"path", writeTestGrid()}});
   EXPECT_EQ(4, getInt(r.data, "nx"));
+  r = kernel.commands().execute("grid.stats", {{"path", writeTestGrid()}});
+  EXPECT_EQ(1, getInt(r.data, "empty"));
+  r = kernel.commands().execute("processing.grid", {{"datalist", std::string("dl.mb-1")},
+                                                    {"output", std::string("bathy")},
+                                                    {"spacing", std::int64_t(50)}});
+  ASSERT_TRUE(r.ok) << r.message;
+  EXPECT_NE(std::string::npos, getString(r.data, "command").find("-E50/50/meters!"));
+  EXPECT_TRUE(kernel.commands().execute("jobs.list").ok);
   ASSERT_TRUE(kernel.services().has<IHelpService>());
   r = kernel.commands().execute("help.show", {{"name", std::string("mbgrid")}, {"lang", std::string("ja")}});
   ASSERT_TRUE(r.ok) << r.message;

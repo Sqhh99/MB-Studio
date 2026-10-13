@@ -164,24 +164,30 @@ platform::ProcessResult ToolService::run(const std::string &name, const std::vec
   }
   const std::int64_t job = nextJob_++;
   if (events_ != nullptr)
-    events_->publish("job.started", {{"job", job},
+    events_->publish("tool.started", {{"run", job},
                                      {"tool", name},
                                      {"command", platform::formatCommand(name, arguments)}});
   platform::ProcessSpec spec;
   spec.program = info.path;
   spec.arguments = arguments;
   spec.workingDirectory = workingDirectory;
+  // MB-System programs start other programs by name (mbdatalist -O runs
+  // mbinfo, mbcopy and mblist; mbgrid creates missing .inf files): put the
+  // directory of the program first on their PATH.
+  const std::string current = platform::getEnv("PATH");
+  spec.environment.emplace_back("PATH", platform::parentPath(info.path) +
+                                            (current.empty() ? std::string() : platform::pathListSeparator() + current));
   result = platform::runProcess(
       spec,
       [&](const std::string &chunk) {
         if (output)
           output(chunk);
         if (events_ != nullptr)
-          events_->publish("job.output", {{"job", job}, {"text", chunk}});
+          events_->publish("tool.output", {{"run", job}, {"text", chunk}});
       },
       cancel);
   if (events_ != nullptr)
-    events_->publish("job.finished", {{"job", job},
+    events_->publish("tool.finished", {{"run", job},
                                       {"tool", name},
                                       {"exitCode", static_cast<std::int64_t>(result.exitCode)},
                                       {"cancelled", result.cancelled},
