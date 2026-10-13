@@ -90,7 +90,9 @@ stage\
 Pushing a tag `v<version>` (matching the `VERSION` file, e.g. `v0.1.0`) runs
 the [Release workflow](../.github/workflows/release.yml): it builds and tests
 everything with `build.yml`, creates the installer and publishes it with its
-SHA-256 checksum as a GitHub release.
+SHA-256 checksum as a GitHub release. The workflow can also be started by
+hand (*Actions → Release → Run workflow*); it then releases `v<VERSION>` and
+creates that tag on the commit it built.
 
 ## Cross-compiling from Linux (developers)
 

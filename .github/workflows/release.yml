@@ -1,12 +1,17 @@
 # MB-Studio release: pushing a tag "v<version>" (for example v0.1.0) builds
 # and tests the Windows installer with build.yml and publishes it as a
 # GitHub release. Only the Windows version is released.
+#
+# The workflow can also be started by hand (Actions > Release > Run workflow)
+# on a branch: it then releases "v<contents of VERSION>" and creates that tag
+# on the commit it built.
 name: Release
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,19 +21,29 @@ jobs:
     name: Check the tag
     runs-on: ubuntu-latest
     outputs:
+      tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
       - id: version
         run: |
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
           file_version="$(head -n1 VERSION | tr -d '[:space:]')"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="v${file_version}"
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+              echo "::error::Tag ${tag} already exists; push a new tag or bump VERSION"
+              exit 1
+            fi
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          version="${tag#v}"
           if [ "${version%%-*}" != "${file_version}" ]; then
             echo "::error::Tag ${tag} does not match the VERSION file (${file_version})"
             exit 1
           fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           if [[ "${version}" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
 
@@ -89,6 +104,8 @@ jobs:
         run: |
           flags=""
           if [ "${{ needs.check.outputs.prerelease }}" = "true" ]; then flags="--prerelease"; fi
-          gh release create "${GITHUB_REF_NAME}" dist/*.exe dist/SHA256SUMS.txt \
+          # (--target creates the tag when the workflow was started by hand)
+          gh release create "${{ needs.check.outputs.tag }}" dist/*.exe dist/SHA256SUMS.txt \
+            --target "${GITHUB_SHA}" \
             --title "MB-Studio ${{ needs.check.outputs.version }}" \
             --notes-file release-notes.md ${flags}
