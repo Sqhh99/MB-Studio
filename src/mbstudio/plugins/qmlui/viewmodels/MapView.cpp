@@ -188,6 +188,8 @@ void MapView::paint(QPainter *painter) {
         continue;
       const QPointF tl = toScreen(l.bounds.west, l.bounds.north);
       const QPointF br = toScreen(l.bounds.east, l.bounds.south);
+      // grid cells stay sharp when magnified (each pixel is a cell)
+      painter->setRenderHint(QPainter::SmoothPixmapTransform, (br.x() - tl.x()) < l.image.width());
       painter->setOpacity(std::clamp(l.opacity, 0.0, 1.0));
       painter->drawImage(QRectF(tl, br), l.image);
     }
@@ -213,6 +215,8 @@ void MapView::paint(QPainter *painter) {
     const double y = toScreen(0, lat).y();
     painter->setPen(QPen(grid_, 1.0));
     painter->drawLine(QPointF(0, y), QPointF(width(), y));
+    if (y > height() - 44)
+      continue;  // keep the scale bar and the longitude labels readable
     painter->setPen(text_);
     painter->drawText(QPointF(4, y - 3), formatDegrees(lat, false));
   }
