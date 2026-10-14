@@ -457,8 +457,10 @@ TEST_F(ProjectTest, MapFiguresWithGmt) {
   ASSERT_FALSE(plan.steps.empty());
   for (const auto &step : plan.steps)
     if (!step.tool.empty()) {
-      ASSERT_EQ(2u, step.environment.size());
+      ASSERT_EQ(3u, step.environment.size());
       EXPECT_EQ(0u, step.environment[0].second.find("mbstudio-job-"));
+      EXPECT_EQ("GMT_SESSIONDIR", step.environment[2].first);
+      EXPECT_EQ(step.environment[1].second, step.environment[2].second);
     }
   EXPECT_NE(std::string::npos, plan.outputs.front().find("map.ps"));
 

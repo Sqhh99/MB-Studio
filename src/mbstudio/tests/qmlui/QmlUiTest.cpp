@@ -980,8 +980,11 @@ class QmlUiTest : public QObject {
       QVERIFY(terrain != nullptr);
       QVERIFY(terrain->waitForFinished(30000));
       QVERIFY2(terrain->loaded(), qPrintable(terrain->error()));
-      QVERIFY(item(QStringLiteral("terrainView")) != nullptr);
-      QVERIFY(item(QStringLiteral("terrainToolbar")) != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(item(QStringLiteral("terrainView")) != nullptr, 5000);
+      QTRY_VERIFY_WITH_TIMEOUT(item(QStringLiteral("terrainToolbar")) != nullptr, 5000);
+      QVERIFY(item(QStringLiteral("terrainView"))->isVisible());
+      QVERIFY(item(QStringLiteral("terrainView"))->width() > 0);
+      QVERIFY(item(QStringLiteral("terrainView"))->height() > 0);
       terrain->setTool(2);
       shoot(QStringLiteral("08-split-grid-and-3d"));
       app.workspaceModel()->unsplit();

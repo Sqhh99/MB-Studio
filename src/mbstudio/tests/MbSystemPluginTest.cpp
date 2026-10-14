@@ -765,10 +765,13 @@ TEST(ProcessingService, GmtFigureRecipes) {
   std::string all;
   for (const auto &step : plan.steps) {
     // every call joins the private session of the job
-    ASSERT_EQ(2u, step.environment.size());
+    ASSERT_EQ(3u, step.environment.size());
     EXPECT_EQ("GMT_SESSION_NAME", step.environment[0].first);
     EXPECT_EQ("mbstudio-job-3", step.environment[0].second);
     EXPECT_EQ("GMT_TMPDIR", step.environment[1].first);
+    EXPECT_EQ(p.temporaryDirectory, step.environment[1].second);
+    EXPECT_EQ("GMT_SESSIONDIR", step.environment[2].first);
+    EXPECT_EQ(p.temporaryDirectory, step.environment[2].second);
     for (const auto &a : step.arguments)
       all += a + " ";
     all += "\n";
@@ -834,6 +837,62 @@ TEST(ProcessingService, GmtFigureRecipes) {
   EXPECT_DOUBLE_EQ(5.0, ProcessingService::scaleBarKm(37.0));
   EXPECT_DOUBLE_EQ(0.5, ProcessingService::scaleBarKm(3.0));
   EXPECT_DOUBLE_EQ(2.0, ProcessingService::scaleBarKm(10.0));
+}
+
+TEST(ProcessingService, GmtFiguresWithTheSameSessionNameRemainIsolated) {
+  ToolService tools(toolDirs(), nullptr);
+  ToolInfo gmt;
+  if (!tools.tool("gmt", gmt) || !gmt.available)
+    GTEST_SKIP() << "GMT is not installed where the tests can find it";
+
+  const std::string root = scratch("gmt sessions " + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  const std::vector<std::string> directories = {
+      platform::joinPath(root, "first"), platform::joinPath(root, "second")};
+  ProcessingService processing;
+  FigureParameters p;
+  p.grid = writeTestGrid();
+  p.outputRoot = "figure";
+  p.formats = {"ps"};
+  p.session = "mbstudio-job-1";  // different projects can have the same job number
+  p.scaleBar = false;
+  std::vector<CommandPlan> plans;
+  for (const auto &directory : directories) {
+    ASSERT_TRUE(platform::makeDirectories(directory));
+    p.temporaryDirectory = directory;
+    CommandPlan plan = processing.figure(p);
+    ASSERT_TRUE(plan.ok) << plan.error;
+    ASSERT_FALSE(plan.steps.empty());
+    const auto &begin = plan.steps.front();
+    std::string output;
+    const auto result = tools.runWithEnvironment("gmt", begin.arguments, directory, begin.environment,
+                                                 [&](const std::string &text) { output += text; });
+    ASSERT_TRUE(result.started) << result.error;
+    ASSERT_EQ(0, result.exitCode) << output;
+    plans.push_back(std::move(plan));
+  }
+
+  // Both sessions must still exist after the second begin, before either end.
+  for (const auto &directory : directories) {
+    bool sessionFound = false;
+    for (const auto &entry : platform::listDirectory(directory))
+      if (entry.rfind("gmt_session.", 0) == 0 && platform::isDirectory(platform::joinPath(directory, entry)))
+        sessionFound = true;
+    ASSERT_TRUE(sessionFound) << "GMT session is missing from " << directory;
+  }
+  for (std::size_t i = 0; i < plans.size(); i++) {
+    for (std::size_t step = 1; step < plans[i].steps.size(); step++) {
+      const auto &s = plans[i].steps[step];
+      std::string output;
+      const auto result = tools.runWithEnvironment("gmt", s.arguments, directories[i], s.environment,
+                                                   [&](const std::string &text) { output += text; });
+      ASSERT_TRUE(result.started) << result.error;
+      ASSERT_EQ(0, result.exitCode) << s.title << "\n" << output;
+    }
+    std::string postscript;
+    ASSERT_TRUE(platform::readTextFile(platform::joinPath(directories[i], "figure.ps"), postscript));
+    EXPECT_EQ(0u, postscript.find("%!PS-Adobe"));
+  }
 }
 
 TEST(HelpService, EveryProgramHasPagesInAllLanguages) {

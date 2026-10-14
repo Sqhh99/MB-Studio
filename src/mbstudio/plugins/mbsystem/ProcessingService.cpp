@@ -656,8 +656,10 @@ CommandPlan ProcessingService::figure(const FigureParameters &p) const {
   std::vector<std::pair<std::string, std::string>> environment;
   if (!p.session.empty())
     environment.emplace_back("GMT_SESSION_NAME", p.session);
-  if (!p.temporaryDirectory.empty())
+  if (!p.temporaryDirectory.empty()) {
     environment.emplace_back("GMT_TMPDIR", p.temporaryDirectory);
+    environment.emplace_back("GMT_SESSIONDIR", p.temporaryDirectory);
+  }
   auto gmt = [&plan, &environment](const std::string &title, std::vector<std::string> args) {
     JobStep s = step(title, "gmt", std::move(args));
     s.environment = environment;

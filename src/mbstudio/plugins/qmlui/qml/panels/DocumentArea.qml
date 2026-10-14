@@ -32,22 +32,26 @@ Item {
 
     Repeater {
         model: root.workspaces
-        delegate: Loader {
-            id: loader
+        delegate: Item {
+            id: documentHost
             required property string url
             required property var document
             required property string argument
             required property int group
             required property bool shown
-            parent: (group === 1 ? right.host : left.host) || null
-            anchors.fill: parent
-            source: url
-            visible: shown
-            onLoaded: {
-                if (item !== null && item.document !== undefined)
-                    item.document = Qt.binding(function() { return loader.document })
-                if (item !== null && item.argument !== undefined)
-                    item.argument = Qt.binding(function() { return loader.argument })
+            // Repeater keeps its delegates as siblings; only the contained
+            // document moves between the visual hosts of the split groups.
+            Loader {
+                parent: (documentHost.group === 1 ? right.host : left.host) || null
+                anchors.fill: parent
+                source: documentHost.url
+                visible: documentHost.shown
+                onLoaded: {
+                    if (item !== null && item.document !== undefined)
+                        item.document = Qt.binding(function() { return documentHost.document })
+                    if (item !== null && item.argument !== undefined)
+                        item.argument = Qt.binding(function() { return documentHost.argument })
+                }
             }
         }
     }

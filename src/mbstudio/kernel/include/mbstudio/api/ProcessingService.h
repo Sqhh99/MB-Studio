@@ -144,8 +144,8 @@ struct ExportParameters {
 };
 
 // A cartographic figure made with GMT (modern mode). Each figure job runs in
-// its own GMT session (GMT_SESSION_NAME) with its own temporary directory
-// (GMT_TMPDIR), so concurrent figure jobs never share GMT state.
+// its own GMT session (GMT_SESSION_NAME) with private temporary and session
+// directories (GMT_TMPDIR and GMT_SESSIONDIR).
 struct FigureParameters {
   std::string kind = "bathymetry";   // bathymetry | overview | quality | perspective
   std::string grid;                  // GMT grid (empty: survey lines only, "overview")

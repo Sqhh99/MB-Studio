@@ -24,6 +24,16 @@ def run(*args):
   return proc.returncode, proc.stdout.decode('utf-8'), proc.stderr.decode('utf-8')
 
 
+def job_logs(project):
+  logs = []
+  for directory, _, files in os.walk(os.path.join(project, 'jobs')):
+    if 'job.log' in files:
+      path = os.path.join(directory, 'job.log')
+      with open(path, encoding='utf-8', errors='replace') as stream:
+        logs.append(path + '\n' + stream.read())
+  return '\n'.join(logs)
+
+
 class HostTest(unittest.TestCase):
 
   def testVersion(self):
@@ -124,7 +134,7 @@ class HostTest(unittest.TestCase):
       if code == 0 and json.loads(out)['gmt']:
         code, out, err = run('--command', 'project.figure', 'project=' + project, 'name=map', 'formats=ps',
                              'contours=10', 'title=Survey')
-        self.assertEqual(0, code, out + err)
+        self.assertEqual(0, code, out + err + (job_logs(project) if code != 0 else ''))
         self.assertEqual('completed', json.loads(out)['state'], out)
         self.assertTrue(os.path.exists(os.path.join(project, 'products', 'figures', 'map.ps')))
     finally:
