@@ -10,7 +10,7 @@ Rectangle {
     property string unit
     property string iconPath
     property color tint: Theme.accent
-    implicitHeight: 86
+    implicitHeight: 62
     implicitWidth: 180
     radius: Theme.radius
     color: Theme.surface
@@ -18,15 +18,15 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 12
+        anchors.margins: 10
+        spacing: 10
         Rectangle {
             visible: root.iconPath !== ""
-            Layout.preferredWidth: 40
-            Layout.preferredHeight: 40
-            radius: 20
+            Layout.preferredWidth: 30
+            Layout.preferredHeight: 30
+            radius: Theme.radius
             color: Qt.rgba(root.tint.r, root.tint.g, root.tint.b, 0.15)
-            Icon { anchors.centerIn: parent; path: root.iconPath; color: root.tint; size: 20 }
+            Icon { anchors.centerIn: parent; path: root.iconPath; color: root.tint; size: 16 }
         }
         ColumnLayout {
             Layout.fillWidth: true
@@ -45,7 +45,7 @@ Rectangle {
                 Text {
                     text: root.value
                     color: Theme.text
-                    font.pixelSize: 20
+                    font.pixelSize: 17
                     font.weight: Font.DemiBold
                     Layout.maximumWidth: root.width - 90
                     elide: Text.ElideRight

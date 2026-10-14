@@ -14,6 +14,16 @@ Rectangle {
 
     function fmt(v, digits) { return Number(v).toFixed(digits) }
 
+    Connections {
+        target: map
+        function onCursorChanged() {
+            App.cursorText = map.cursorInside
+                    ? qsTr("lon %1  lat %2").arg(page.fmt(map.cursorLon, 6)).arg(page.fmt(map.cursorLat, 6))
+                      + (map.cursorValue.z !== undefined ? "  z " + page.fmt(map.cursorValue.z, 2) + " " + (map.cursorValue.units || "") : "")
+                    : ""
+        }
+    }
+
     MapView {
         id: map
         objectName: "mapView"

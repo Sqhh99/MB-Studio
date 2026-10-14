@@ -13,3 +13,6 @@ CommandPreview 1.0 CommandPreview.qml
 ParamField 1.0 ParamField.qml
 JobRow 1.0 JobRow.qml
 WorkflowGuide 1.0 WorkflowGuide.qml
+TitleBar 1.0 TitleBar.qml
+WindowButton 1.0 WindowButton.qml
+ResizeHandles 1.0 ResizeHandles.qml

@@ -14,6 +14,7 @@ set(CMAKE_AUTORCC ON)
 add_library(mbstudio_qmlui_core OBJECT
   QmlFrontend.cpp
   viewmodels/AppController.cpp
+  viewmodels/EditorViews.cpp
   viewmodels/FormatListModel.cpp
   viewmodels/GridViewModel.cpp
   viewmodels/JobListModel.cpp
@@ -21,11 +22,16 @@ add_library(mbstudio_qmlui_core OBJECT
   viewmodels/MapView.cpp
   viewmodels/ProcessingViewModel.cpp
   viewmodels/ProjectViewModel.cpp
+  viewmodels/SceneRenderer.cpp
+  viewmodels/SoundingEditorModel.cpp
   viewmodels/SwathViewModel.cpp
+  viewmodels/TerrainView.cpp
+  viewmodels/TerrainViewModel.cpp
   viewmodels/ToolsViewModel.cpp
   viewmodels/TrackPlot.cpp
   viewmodels/Translator.cpp
   viewmodels/VariantListModel.cpp
+  viewmodels/WindowChrome.cpp
   viewmodels/WorkspaceModel.cpp
   qmlui.qrc)
 set_target_properties(mbstudio_qmlui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

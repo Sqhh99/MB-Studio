@@ -16,6 +16,7 @@
 #include "mbstudio/api/GridService.h"
 #include "mbstudio/api/ProjectService.h"
 #include "mbstudio/kernel/EventBus.h"
+#include "mbstudio/platform/Geodesy.h"
 
 namespace mbstudio {
 class Kernel;
@@ -40,6 +41,9 @@ struct MapLayer {
   bool visible = true;
   std::shared_ptr<const Grid> grid;
   QString style;     // colour map and shading the image was rendered with
+  // the grid's own coordinates (projected grids are warped onto the map)
+  platform::MapProjection projection;
+  QString error;     // why the layer cannot be shown
 };
 
 class ProjectViewModel : public QObject {
@@ -65,6 +69,8 @@ class ProjectViewModel : public QObject {
   Q_PROPERTY(bool mapBusy READ mapBusy NOTIFY mapChanged)
   // what the processing chain has done so far (for the workflow guide)
   Q_PROPERTY(QVariantMap progress READ progress NOTIFY progressChanged)
+  // the recommended next step: {kind, reason, count}
+  Q_PROPERTY(QVariantMap nextAction READ nextAction NOTIFY progressChanged)
 
  public:
   ProjectViewModel(Kernel *kernel, std::shared_ptr<IProjectService> project, std::shared_ptr<IGridService> grids,
@@ -89,6 +95,7 @@ class ProjectViewModel : public QObject {
   int mapRevision() const { return mapRevision_; }
   bool mapBusy() const { return pendingLayers_ > 0 || tracksLoading_; }
   QVariantMap progress() const;
+  QVariantMap nextAction() const;
   std::shared_ptr<IProjectService> service() const { return project_; }
   // ids of the selected lines, or empty for "all lines"
   std::vector<std::string> selection() const;
@@ -108,6 +115,8 @@ class ProjectViewModel : public QObject {
   // mode 0: select only this line, 1: toggle it, 2: extend the range to it
   Q_INVOKABLE void select(const QString &id, int mode = 0);
   Q_INVOKABLE void selectAll();
+  // Select exactly these lines (those that still exist).
+  Q_INVOKABLE void selectIds(const QStringList &ids);
   Q_INVOKABLE void clearSelection();
   Q_INVOKABLE bool lineSelected(const QString &id) const { return selected_.contains(id); }
   Q_INVOKABLE QVariantMap lineInfo(const QString &id) const;
@@ -125,6 +134,17 @@ class ProjectViewModel : public QObject {
   Q_INVOKABLE void setWorkspaceState(const QString &json);
   Q_INVOKABLE QString datalistPath(const QString &which) const;
   Q_INVOKABLE QString newestProductOfJob(qint64 jobId) const;
+  Q_INVOKABLE QString newestAssetOfJob(qint64 jobId) const;
+  // [{version, path, format, exists}] of a survey line
+  Q_INVOKABLE QVariantList lineVersions(const QString &lineId) const;
+  // Run a job of the history again (a new attempt); returns the job id.
+  Q_INVOKABLE qint64 retryJob(qint64 sequence);
+  // Make a product again from its recipe with the current data.
+  Q_INVOKABLE qint64 regenerateProduct(const QString &assetId);
+  // Whether a map layer is drawn ("" if so), or why it is not.
+  Q_INVOKABLE QString layerProblem(const QString &assetId) const;
+  Q_INVOKABLE bool layerReady(const QString &assetId) const;
+  Q_INVOKABLE bool hasMapLayer(const QString &assetId) const;
   Q_INVOKABLE void refresh();
   // Process events until the map tracks and layers are loaded (tests).
   Q_INVOKABLE bool waitForMap(int timeoutMs = 30000);
@@ -137,6 +157,8 @@ class ProjectViewModel : public QObject {
   void mapChanged();
   void progressChanged();
   void notify(const QString &message);
+  // a map layer finished rendering (shown) or failed (problem says why)
+  void layerLoaded(const QString &assetId, bool shown, const QString &problem);
 
  private:
   void onChanged(const QString &what);

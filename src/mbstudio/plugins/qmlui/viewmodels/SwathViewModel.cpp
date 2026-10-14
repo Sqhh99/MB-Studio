@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointF>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -97,6 +99,45 @@ void SwathViewModel::clear() {
   track_.clear();
   profile_.clear();
   emit stateChanged();
+}
+
+void SwathViewModel::setLine(const QString &lineId, const QVariantList &versions, const QString &version) {
+  lineId_ = lineId;
+  versions_ = versions;
+  version_.clear();
+  QString wanted = version;
+  if (wanted.isEmpty())
+    for (const auto &v : versions)  // the most processed file
+      if (v.toMap().value(QStringLiteral("exists")).toBool())
+        wanted = v.toMap().value(QStringLiteral("version")).toString();
+  setVersion(wanted);
+  emit versionChanged();
+}
+
+void SwathViewModel::setVersion(const QString &version) {
+  for (const auto &v : versions_) {
+    const QVariantMap m = v.toMap();
+    if (m.value(QStringLiteral("version")).toString() != version)
+      continue;
+    if (version == version_ && loaded_)
+      return;
+    version_ = version;
+    inspect(m.value(QStringLiteral("path")).toString(), m.value(QStringLiteral("format")).toInt());
+    emit versionChanged();
+    return;
+  }
+}
+
+QString SwathViewModel::viewState() const {
+  return version_.isEmpty() ? QString()
+                            : QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("version"), version_}})
+                                                    .toJson(QJsonDocument::Compact));
+}
+
+void SwathViewModel::setViewState(const QString &json) {
+  const QString version = QJsonDocument::fromJson(json.toUtf8()).object().value(QStringLiteral("version")).toString();
+  if (!version.isEmpty())
+    setVersion(version);
 }
 
 bool SwathViewModel::waitForFinished(int timeoutMs) {

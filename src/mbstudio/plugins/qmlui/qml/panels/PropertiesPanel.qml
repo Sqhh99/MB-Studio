@@ -1,5 +1,7 @@
-// Right dock: details of what is selected (a product with its layer style,
-// survey lines, or the project with its processing guide).
+// Right dock: the properties of the active document (display, tools,
+// versions; context sensitive, so the documents need no sidebars of their
+// own), then of what is selected (a product with its layer style and state,
+// survey lines, or the project with its next step and processing guide).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -16,6 +18,12 @@ Rectangle {
     readonly property var info: product !== "" && project.mapRevision >= 0 ? project.productInfo(product) : ({})
     readonly property var line: project.selectedCount === 1 && project.lineCount >= 0 ? project.lineInfo(project.selectedIds[0]) : ({})
     readonly property var summary: project.summary
+    readonly property string workspace: App.workspaces.currentWorkspace
+    readonly property string documentPage: workspace === "grid" ? "GridProperties.qml"
+                                         : workspace === "terrain" ? "TerrainProperties.qml"
+                                         : workspace === "editor" ? "EditorProperties.qml"
+                                         : workspace === "inspect" ? "InspectProperties.qml"
+                                         : workspace === "figure" ? "FigureProperties.qml" : ""
     signal panelRequested(string kind)
     signal productClosed()
 
@@ -42,6 +50,31 @@ Rectangle {
             ColumnLayout {
                 width: scroll.availableWidth
                 spacing: 6
+
+                // the active document
+                Loader {
+                    id: documentProperties
+                    objectName: "documentProperties"
+                    Layout.fillWidth: true
+                    Layout.margins: Theme.panelPadding
+                    visible: active && status === Loader.Ready
+                    active: root.documentPage !== ""
+                    source: root.documentPage
+                    onLoaded: {
+                        if (item.doc !== undefined)
+                            item.doc = Qt.binding(function() { return App.workspaces.currentDocument })
+                        if (item.assetId !== undefined)
+                            item.assetId = Qt.binding(function() { return App.workspaces.currentArgument })
+                        if (typeof item.panelRequested === "function")
+                            item.panelRequested.connect(root.panelRequested)
+                    }
+                }
+                Rectangle {
+                    visible: documentProperties.visible && root.project.isOpen
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.border
+                }
 
                 // nothing open
                 Text {
@@ -70,6 +103,25 @@ Rectangle {
                     }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("File"); value: root.info.fileName || ""; mono: true }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Made"); value: root.info.created || "" }
+                    // made from the current data?
+                    Rectangle {
+                        visible: root.info.status === "outdated" || root.info.status === "pending"
+                        Layout.fillWidth: true
+                        implicitHeight: stateText.implicitHeight + 12
+                        radius: Theme.radiusSmall
+                        color: Qt.rgba(Theme.productStatusColor(root.info.status || "").r, Theme.productStatusColor(root.info.status || "").g, Theme.productStatusColor(root.info.status || "").b, 0.15)
+                        Text {
+                            id: stateText
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            text: root.info.status === "outdated"
+                                  ? qsTr("Outdated: %1 of its survey lines changed since it was made.").arg(root.info.staleInputs || 0)
+                                  : qsTr("%1 of its survey lines have edits or corrections that are not processed yet.").arg(root.info.staleInputs || 0)
+                            color: Theme.text
+                            font.pixelSize: Theme.fontSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
                     Repeater {
                         model: root.info.parameters ? Object.keys(root.info.parameters) : []
                         delegate: PropertyRow {
@@ -98,7 +150,7 @@ Rectangle {
                         Text { text: qsTr("Colour table"); color: Theme.textMuted; font.pixelSize: Theme.fontSmall }
                         ComboBox {
                             Layout.fillWidth: true
-                            model: App.grid.colorMaps
+                            model: App.colorMaps
                             currentIndex: root.info.colorMap !== undefined ? root.info.colorMap : 0
                             onActivated: (index) => root.project.setLayerColorMap(root.product, index)
                         }
@@ -108,10 +160,18 @@ Rectangle {
                             onToggled: root.project.setLayerHillshade(root.product, checked)
                         }
                     }
-                    RowLayout {
+                    Flow {
+                        Layout.fillWidth: true
                         Layout.topMargin: 6
-                        spacing: 6
+                        spacing: 4
                         Button { text: qsTr("Open"); visible: root.info.mappable === true; onClicked: App.openGrid(root.project.productPath(root.product)) }
+                        Button { text: qsTr("3D"); visible: root.info.mappable === true; onClicked: App.openTerrain(root.project.productPath(root.product)) }
+                        Button { text: qsTr("Open"); visible: root.info.type === "figure"; onClicked: App.openFigure(root.product) }
+                        Button {
+                            text: qsTr("Make again")
+                            visible: root.info.regenerable === true && root.info.status === "outdated"
+                            onClicked: root.project.regenerateProduct(root.product)
+                        }
                         Button {
                             text: qsTr("Export…")
                             visible: root.info.mappable === true
@@ -140,7 +200,15 @@ Rectangle {
                         Layout.fillWidth: true
                     }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Format"); value: (root.line.formatName || "") + " (" + (root.line.format || "") + ")" }
-                    PropertyRow { Layout.fillWidth: true; label: qsTr("State"); value: root.line.state || "" }
+                    PropertyRow {
+                        Layout.fillWidth: true
+                        label: qsTr("State")
+                        value: root.line.status === "processed" ? qsTr("processed (up to date)")
+                             : root.line.status === "edits-pending" ? qsTr("edits not processed yet")
+                             : root.line.status === "corrections-pending" ? qsTr("corrections not processed yet")
+                             : root.line.status === "processing-required" ? qsTr("edits or corrections set, not processed yet")
+                             : qsTr("unprocessed")
+                    }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Start"); value: root.line.timeStart || "" }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("End"); value: root.line.timeEnd || "" }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Pings"); value: root.line.records !== undefined ? String(root.line.records) : "" }
@@ -148,10 +216,12 @@ Rectangle {
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Depth"); value: root.fmt(root.line.depthMin, 1) + " … " + root.fmt(root.line.depthMax, 1) + " m" }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Size"); value: root.fmt(root.line.sizeMB, 1) + " MB" }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("File"); value: root.line.path || ""; mono: true }
-                    RowLayout {
+                    Flow {
+                        Layout.fillWidth: true
                         Layout.topMargin: 6
-                        spacing: 6
-                        Button { text: qsTr("Inspect"); onClicked: App.inspectLine(root.line.lineId) }
+                        spacing: 4
+                        Button { text: qsTr("Inspect"); onClicked: App.inspectLine(root.line.lineId, "") }
+                        Button { text: qsTr("Edit soundings"); onClicked: App.openEditor([root.line.lineId]) }
                         Button { text: qsTr("mbinfo"); onClicked: App.runToolOn("mbinfo", root.line.path) }
                         IconButton { iconPath: Icons.folderOpen; tip: qsTr("Show in folder"); onClicked: App.showInFolder(root.line.path) }
                     }
@@ -184,6 +254,47 @@ Rectangle {
                         value: root.summary.hasBounds ? root.fmt(root.summary.west, 4) + " / " + root.fmt(root.summary.east, 4) + "\n" + root.fmt(root.summary.south, 4) + " / " + root.fmt(root.summary.north, 4) : ""
                     }
                     PropertyRow { Layout.fillWidth: true; label: qsTr("Folder"); value: root.project.root; mono: true }
+                    // the recommended next step
+                    Rectangle {
+                        objectName: "nextAction"
+                        visible: (root.project.nextAction.kind || "") !== ""
+                        Layout.fillWidth: true
+                        Layout.topMargin: 8
+                        implicitHeight: nextColumn.implicitHeight + 16
+                        radius: Theme.radius
+                        color: Theme.accentSoft
+                        ColumnLayout {
+                            id: nextColumn
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 4
+                            Text { text: qsTr("Next step"); color: Theme.accent; font.pixelSize: Theme.fontSmall; font.weight: Font.DemiBold }
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.project.nextAction.reason || ""
+                                color: Theme.text
+                                font.pixelSize: Theme.fontSmall + 1
+                                wrapMode: Text.WordWrap
+                            }
+                            Button {
+                                visible: root.project.nextAction.kind !== "regenerate"
+                                text: root.project.nextAction.kind === "import" ? qsTr("Add survey data…")
+                                    : root.project.nextAction.kind === "preprocess" ? qsTr("Preprocess…")
+                                    : root.project.nextAction.kind === "process" ? qsTr("Process lines…")
+                                    : qsTr("Grid bathymetry…")
+                                flat: true
+                                onClicked: root.panelRequested(root.project.nextAction.kind)
+                            }
+                            Text {
+                                visible: root.project.nextAction.kind === "regenerate"
+                                Layout.fillWidth: true
+                                text: qsTr("Outdated products are marked in the project panel; make them again from their menu.")
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fontSmall
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
                     Text {
                         Layout.topMargin: 10
                         text: qsTr("Processing")

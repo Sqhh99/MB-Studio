@@ -9,7 +9,7 @@ Rectangle {
     property string iconPath
     property string subtitle
     default property alias tools: toolRow.data
-    implicitHeight: 38
+    implicitHeight: 30
     color: Theme.panelHeader
 
     RowLayout {
@@ -17,7 +17,7 @@ Rectangle {
         anchors.leftMargin: Theme.panelPadding
         anchors.rightMargin: 4
         spacing: 8
-        Icon { path: root.iconPath; color: Theme.accent; size: 16; visible: root.iconPath !== "" }
+        Icon { path: root.iconPath; color: Theme.accent; size: 14; visible: root.iconPath !== "" }
         Text {
             text: root.title
             color: Theme.text

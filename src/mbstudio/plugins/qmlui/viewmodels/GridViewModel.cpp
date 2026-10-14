@@ -4,17 +4,27 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMutexLocker>
 #include <QtConcurrent/QtConcurrentRun>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
 namespace mbstudio::ui {
 
+namespace {
+std::atomic<int> nextImageKey{1};
+}
+
 GridViewModel::GridViewModel(std::shared_ptr<IGridService> grids, std::shared_ptr<IGridRenderService> renderer,
                              QObject *parent)
-    : QObject(parent), grids_(std::move(grids)), renderer_(std::move(renderer)) {
+    : QObject(parent), grids_(std::move(grids)), renderer_(std::move(renderer)), key_(nextImageKey++) {
+  GridImageProvider::add(key_, this);
+  connect(this, &GridViewModel::optionsChanged, this, &GridViewModel::viewStateChanged);
+  connect(this, &GridViewModel::viewChanged, this, &GridViewModel::viewStateChanged);
   renderTimer_.setSingleShot(true);
   renderTimer_.setInterval(40);  // coalesce slider movements
   connect(&renderTimer_, &QTimer::timeout, this, &GridViewModel::startRender);
@@ -56,7 +66,17 @@ GridViewModel::GridViewModel(std::shared_ptr<IGridService> grids, std::shared_pt
       info_[QStringLiteral("zUnits")] = QString::fromStdString(g.zUnits);
       info_[QStringLiteral("xName")] = QString::fromStdString(g.xName);
       info_[QStringLiteral("yName")] = QString::fromStdString(g.yName);
+      projection_ = g.geographic ? platform::MapProjection::parse("") : platform::MapProjection::parse(g.projection);
+      info_[QStringLiteral("projection")] = QString::fromStdString(g.projection);
+      info_[QStringLiteral("projectionName")] =
+          g.geographic ? tr("Geographic (WGS 84)")
+                       : projection_.valid() ? QString::fromStdString(projection_.name()) : tr("Projected (unknown)");
       error_.clear();
+      if (!pendingState_.isEmpty()) {
+        const QString state = pendingState_;
+        pendingState_.clear();
+        setViewState(state);
+      }
       startRender();
     } else {
       error_ = QString::fromStdString(result.error);
@@ -81,6 +101,7 @@ GridViewModel::GridViewModel(std::shared_ptr<IGridService> grids, std::shared_pt
 }
 
 GridViewModel::~GridViewModel() {
+  GridImageProvider::remove(key_);
   loadWatcher_.waitForFinished();
   renderWatcher_.waitForFinished();
 }
@@ -198,7 +219,74 @@ void GridViewModel::setExaggeration(double value) {
 }
 
 QString GridViewModel::imageSource() const {
-  return revision_ > 0 ? QStringLiteral("image://mbgrid/%1").arg(revision_) : QString();
+  return revision_ > 0 ? QStringLiteral("image://mbgrid/%1/%2").arg(key_).arg(revision_) : QString();
+}
+
+void GridViewModel::setViewZoom(double value) {
+  value = std::clamp(value, 0.2, 200.0);
+  if (qFuzzyCompare(value, viewZoom_))
+    return;
+  viewZoom_ = value;
+  emit viewChanged();
+}
+
+void GridViewModel::setViewPanX(double value) {
+  if (qFuzzyCompare(value + 1e9, viewPanX_ + 1e9))
+    return;
+  viewPanX_ = value;
+  emit viewChanged();
+}
+
+void GridViewModel::setViewPanY(double value) {
+  if (qFuzzyCompare(value + 1e9, viewPanY_ + 1e9))
+    return;
+  viewPanY_ = value;
+  emit viewChanged();
+}
+
+QString GridViewModel::viewState() const {
+  const QJsonObject o{{QStringLiteral("colorMap"), static_cast<int>(options_.colorMap)},
+                      {QStringLiteral("hillshade"), options_.hillshade},
+                      {QStringLiteral("azimuth"), options_.azimuth},
+                      {QStringLiteral("elevation"), options_.elevation},
+                      {QStringLiteral("exaggeration"), options_.exaggeration},
+                      {QStringLiteral("autoRange"), options_.autoRange},
+                      {QStringLiteral("rangeMin"), options_.zmin},
+                      {QStringLiteral("rangeMax"), options_.zmax},
+                      {QStringLiteral("layer"), layer_},
+                      {QStringLiteral("showInterpolated"), showInterpolated_},
+                      {QStringLiteral("zoom"), viewZoom_},
+                      {QStringLiteral("panX"), viewPanX_},
+                      {QStringLiteral("panY"), viewPanY_}};
+  return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+void GridViewModel::setViewState(const QString &json) {
+  const QJsonObject o = QJsonDocument::fromJson(json.toUtf8()).object();
+  if (o.isEmpty())
+    return;
+  if (!grid_) {
+    // applied when the grid is loaded (quality layers must be known)
+    pendingState_ = json;
+    return;
+  }
+  options_.colorMap = static_cast<ColorMap>(std::clamp(o.value(QStringLiteral("colorMap")).toInt(), 0, 3));
+  options_.hillshade = o.value(QStringLiteral("hillshade")).toBool(options_.hillshade);
+  options_.azimuth = o.value(QStringLiteral("azimuth")).toDouble(options_.azimuth);
+  options_.elevation = std::clamp(o.value(QStringLiteral("elevation")).toDouble(options_.elevation), 1.0, 90.0);
+  options_.exaggeration = std::clamp(o.value(QStringLiteral("exaggeration")).toDouble(options_.exaggeration), 0.1, 100.0);
+  options_.autoRange = o.value(QStringLiteral("autoRange")).toBool(options_.autoRange);
+  options_.zmin = o.value(QStringLiteral("rangeMin")).toDouble(options_.zmin);
+  options_.zmax = o.value(QStringLiteral("rangeMax")).toDouble(options_.zmax);
+  const int layer = std::clamp(o.value(QStringLiteral("layer")).toInt(0), 0, 2);
+  layer_ = (layer == 1 && !num_) || (layer == 2 && !sd_) ? 0 : layer;
+  showInterpolated_ = o.value(QStringLiteral("showInterpolated")).toBool(showInterpolated_);
+  viewZoom_ = std::clamp(o.value(QStringLiteral("zoom")).toDouble(1.0), 0.2, 200.0);
+  viewPanX_ = o.value(QStringLiteral("panX")).toDouble(0.0);
+  viewPanY_ = o.value(QStringLiteral("panY")).toDouble(0.0);
+  emit optionsChanged();
+  emit viewChanged();
+  scheduleRender();
 }
 
 QVariantList GridViewModel::legend() const {
@@ -331,10 +419,40 @@ void GridViewModel::startRender() {
   }));
 }
 
-QVariantMap GridViewModel::probe(double u, double v) const {
+void GridViewModel::clearProbe() {
+  if (lastProbe_.isEmpty())
+    return;
+  lastProbe_.clear();
+  emit probeChanged();
+}
+
+QString GridViewModel::statusText() const {
+  const QVariantMap &p = lastProbe_;
+  if (p.isEmpty())
+    return QString();
+  const bool geographic = info_.value(QStringLiteral("geographic")).toBool();
+  QString text;
+  if (p.contains(QStringLiteral("lon")))
+    text = tr("lon %1  lat %2").arg(QString::number(p.value(QStringLiteral("lon")).toDouble(), 'f', 6),
+                                    QString::number(p.value(QStringLiteral("lat")).toDouble(), 'f', 6));
+  if (!geographic)
+    text += (text.isEmpty() ? QString() : QStringLiteral("  ")) +
+            tr("x %1  y %2").arg(QString::number(p.value(QStringLiteral("x")).toDouble(), 'f', 1),
+                                 QString::number(p.value(QStringLiteral("y")).toDouble(), 'f', 1));
+  if (p.value(QStringLiteral("valid")).toBool())
+    text += QStringLiteral("  z %1 %2").arg(QString::number(p.value(QStringLiteral("z")).toDouble(), 'f', 2),
+                                           info_.value(QStringLiteral("zUnits")).toString());
+  else
+    text += QStringLiteral("  ") + tr("no data");
+  return text;
+}
+
+QVariantMap GridViewModel::probe(double u, double v) {
   QVariantMap out;
-  if (!grid_ || u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0)
+  if (!grid_ || u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
+    clearProbe();
     return out;
+  }
   const Grid &g = *grid_;
   const int ix = std::clamp(static_cast<int>(std::lround(u * (g.nx - 1))), 0, g.nx - 1);
   const int iy = std::clamp(static_cast<int>(std::lround(v * (g.ny - 1))), 0, g.ny - 1);
@@ -353,6 +471,17 @@ QVariantMap GridViewModel::probe(double u, double v) const {
     if (std::isfinite(d))
       out[QStringLiteral("stddev")] = static_cast<double>(d);
   }
+  // geographic position also for projected grids
+  double lon = 0.0, lat = 0.0;
+  if (g.geographic) {
+    out[QStringLiteral("lon")] = g.xOf(ix);
+    out[QStringLiteral("lat")] = g.yOf(iy);
+  } else if (projection_.valid() && projection_.inverse(g.xOf(ix), g.yOf(iy), lon, lat)) {
+    out[QStringLiteral("lon")] = lon;
+    out[QStringLiteral("lat")] = lat;
+  }
+  lastProbe_ = out;
+  emit probeChanged();
   return out;
 }
 
@@ -369,11 +498,38 @@ QImage GridViewModel::image() const {
   return image_;
 }
 
-GridImageProvider::GridImageProvider(GridViewModel *model)
-    : QQuickImageProvider(QQuickImageProvider::Image), model_(model) {}
+GridImageProvider::GridImageProvider() : QQuickImageProvider(QQuickImageProvider::Image) {}
 
-QImage GridImageProvider::requestImage(const QString &, QSize *size, const QSize &requestedSize) {
-  QImage image = model_ != nullptr ? model_->image() : QImage();
+QMutex &GridImageProvider::mutex() {
+  static QMutex m;
+  return m;
+}
+
+QHash<int, QPointer<GridViewModel>> &GridImageProvider::models() {
+  static QHash<int, QPointer<GridViewModel>> registry;
+  return registry;
+}
+
+void GridImageProvider::add(int key, GridViewModel *model) {
+  QMutexLocker lock(&mutex());
+  models().insert(key, model);
+}
+
+void GridImageProvider::remove(int key) {
+  QMutexLocker lock(&mutex());
+  models().remove(key);
+}
+
+QImage GridImageProvider::requestImage(const QString &id, QSize *size, const QSize &requestedSize) {
+  // "<document key>/<revision>"
+  const int key = id.section(QLatin1Char('/'), 0, 0).toInt();
+  QImage image;
+  {
+    QMutexLocker lock(&mutex());
+    const auto it = models().constFind(key);
+    if (it != models().constEnd() && !it.value().isNull())
+      image = it.value()->image();
+  }
   if (image.isNull()) {
     image = QImage(1, 1, QImage::Format_ARGB32);
     image.fill(Qt::transparent);

@@ -89,7 +89,7 @@ ProcessingViewModel::ProcessingViewModel(std::shared_ptr<IProjectService> projec
 QStringList ProcessingViewModel::kinds() {
   return {QStringLiteral("preprocess"), QStringLiteral("clean"), QStringLiteral("corrections"),
           QStringLiteral("process"),    QStringLiteral("grid"),  QStringLiteral("mosaic"),
-          QStringLiteral("export")};
+          QStringLiteral("export"),     QStringLiteral("figure")};
 }
 
 void ProcessingViewModel::setKind(const QString &kind) {
@@ -115,6 +115,8 @@ QString ProcessingViewModel::title() const {
     return tr("Grid bathymetry");
   if (kind_ == QLatin1String("mosaic"))
     return tr("Backscatter mosaic");
+  if (kind_ == QLatin1String("figure"))
+    return tr("Map figure (GMT)");
   return tr("Export");
 }
 
@@ -131,6 +133,8 @@ QString ProcessingViewModel::description() const {
     return tr("Makes a digital terrain model from the survey lines (mbgrid). The grid is added to the project and shown on the map.");
   if (kind_ == QLatin1String("mosaic"))
     return tr("Makes an amplitude or sidescan mosaic (mbmosaic), optionally after a grazing angle correction.");
+  if (kind_ == QLatin1String("figure"))
+    return tr("Composes a publication figure with GMT: a bathymetric map with contours, a survey overview, a quality map or a perspective view, with colour scale and scale bar, as PNG, PDF or PostScript. The figure and its recipe are kept in the project.");
   return tr("Writes a grid as GeoTIFF, ESRI ASCII, XYZ or a 3D model, or the soundings as a LAS point cloud or XYZ text.");
 }
 
@@ -199,6 +203,27 @@ QVariantMap ProcessingViewModel::defaults(const QString &kind) const {
     d[QStringLiteral("extraGrids")] = false;
     d[QStringLiteral("projection")] = QString();
     d[QStringLiteral("angleCorrection")] = false;
+  } else if (kind == QLatin1String("figure")) {
+    const FigureParameters p;
+    d[QStringLiteral("template")] = QStringLiteral("bathymetry");
+    d[QStringLiteral("source")] = QString();  // the newest grid
+    d[QStringLiteral("name")] = QString();
+    d[QStringLiteral("formats")] = QStringLiteral("png,pdf");
+    d[QStringLiteral("widthCm")] = p.widthCm;
+    d[QStringLiteral("dpi")] = p.dpi;
+    d[QStringLiteral("palette")] = QString::fromStdString(p.palette);
+    d[QStringLiteral("reversePalette")] = p.reversePalette;
+    d[QStringLiteral("contourInterval")] = p.contourInterval;
+    d[QStringLiteral("annotationInterval")] = p.annotationInterval;
+    d[QStringLiteral("illumination")] = p.illumination;
+    d[QStringLiteral("showTracks")] = p.showTracks;
+    d[QStringLiteral("colorbar")] = p.colorbar;
+    d[QStringLiteral("scaleBar")] = p.scaleBar;
+    d[QStringLiteral("title")] = QString();
+    d[QStringLiteral("zLabel")] = QString::fromStdString(p.zLabel);
+    d[QStringLiteral("viewAzimuth")] = p.viewAzimuth;
+    d[QStringLiteral("viewElevation")] = p.viewElevation;
+    d[QStringLiteral("reliefHeightCm")] = p.reliefHeightCm;
   } else if (kind == QLatin1String("export")) {
     d[QStringLiteral("source")] = QStringLiteral("soundings");
     d[QStringLiteral("gridFormat")] = QStringLiteral("geotiff");
@@ -401,6 +426,71 @@ QVariantList ProcessingViewModel::schema(const QString &kind) const {
              .option(QStringLiteral("U"), tr("UTM (zone chosen automatically)"))
              .when(QStringLiteral("soundingFormat"), QStringLiteral("=="), QStringLiteral("las"));
     f << Field(QStringLiteral("name"), QStringLiteral("text"), tr("File name (optional)"));
+  } else if (kind == QLatin1String("figure")) {
+    f << Field(QStringLiteral("template"), QStringLiteral("enum"), tr("Figure"))
+             .option(QStringLiteral("bathymetry"), tr("Bathymetric map with contours"))
+             .option(QStringLiteral("overview"), tr("Survey overview (survey lines)"))
+             .option(QStringLiteral("quality"), tr("Grid quality map"))
+             .option(QStringLiteral("perspective"), tr("Perspective view"));
+    f << Field(QStringLiteral("source"), QStringLiteral("enum"), tr("Grid"))
+             .help(tr("A quality map uses a data count or standard deviation grid."));
+    f << Field(QStringLiteral("name"), QStringLiteral("text"), tr("Product name"));
+    f << Field(QStringLiteral("title"), QStringLiteral("text"), tr("Title on the figure"))
+             .help(tr("GMT's standard fonts show Latin letters only."));
+    f << section(tr("Map"));
+    f << Field(QStringLiteral("palette"), QStringLiteral("enum"), tr("Colour table"))
+             .option(QStringLiteral("haxby"), QStringLiteral("haxby"))
+             .option(QStringLiteral("geo"), QStringLiteral("geo"))
+             .option(QStringLiteral("globe"), QStringLiteral("globe"))
+             .option(QStringLiteral("ocean"), QStringLiteral("ocean"))
+             .option(QStringLiteral("viridis"), QStringLiteral("viridis"))
+             .option(QStringLiteral("turbo"), QStringLiteral("turbo"))
+             .option(QStringLiteral("hot"), QStringLiteral("hot"))
+             .option(QStringLiteral("gray"), QStringLiteral("gray"));
+    f << Field(QStringLiteral("reversePalette"), QStringLiteral("bool"), tr("Reverse the colour table"));
+    f << Field(QStringLiteral("illumination"), QStringLiteral("bool"), tr("Illuminate the relief"))
+             .when(QStringLiteral("template"), QStringLiteral("!="), QStringLiteral("quality"));
+    f << Field(QStringLiteral("contourInterval"), QStringLiteral("number"), tr("Contour interval (0 = none)"))
+             .unit(m)
+             .range(0, 100000, 1)
+             .when(QStringLiteral("template"), QStringLiteral("in"), QVariantList{QStringLiteral("bathymetry"), QStringLiteral("overview")});
+    f << Field(QStringLiteral("annotationInterval"), QStringLiteral("number"), tr("Labelled contours every (0 = none)"))
+             .unit(m)
+             .range(0, 100000, 1)
+             .when(QStringLiteral("contourInterval"), QStringLiteral(">"), 0);
+    f << Field(QStringLiteral("showTracks"), QStringLiteral("bool"), tr("Draw the survey lines"))
+             .when(QStringLiteral("template"), QStringLiteral("in"), QVariantList{QStringLiteral("bathymetry"), QStringLiteral("quality")});
+    f << Field(QStringLiteral("colorbar"), QStringLiteral("bool"), tr("Colour scale"));
+    f << Field(QStringLiteral("zLabel"), QStringLiteral("text"), tr("Colour scale label"))
+             .when(QStringLiteral("colorbar"), QStringLiteral("=="), true);
+    f << Field(QStringLiteral("scaleBar"), QStringLiteral("bool"), tr("Scale bar"))
+             .when(QStringLiteral("template"), QStringLiteral("!="), QStringLiteral("perspective"));
+    f << section(tr("Perspective"));
+    f << Field(QStringLiteral("viewAzimuth"), QStringLiteral("number"), tr("View from (azimuth)"))
+             .unit(QStringLiteral("°"))
+             .range(0, 360, 5)
+             .when(QStringLiteral("template"), QStringLiteral("=="), QStringLiteral("perspective"));
+    f << Field(QStringLiteral("viewElevation"), QStringLiteral("number"), tr("View elevation"))
+             .unit(QStringLiteral("°"))
+             .range(5, 90, 1)
+             .when(QStringLiteral("template"), QStringLiteral("=="), QStringLiteral("perspective"));
+    f << Field(QStringLiteral("reliefHeightCm"), QStringLiteral("number"), tr("Height of the relief"))
+             .unit(QStringLiteral("cm"))
+             .range(0.5, 50, 0.5)
+             .when(QStringLiteral("template"), QStringLiteral("=="), QStringLiteral("perspective"));
+    f << section(tr("Output"));
+    f << Field(QStringLiteral("formats"), QStringLiteral("enum"), tr("Files"))
+             .option(QStringLiteral("png,pdf"), tr("PNG and PDF"))
+             .option(QStringLiteral("png"), tr("PNG"))
+             .option(QStringLiteral("pdf"), tr("PDF"))
+             .option(QStringLiteral("ps"), tr("PostScript (no Ghostscript needed)"));
+    f << Field(QStringLiteral("widthCm"), QStringLiteral("number"), tr("Map width"))
+             .unit(QStringLiteral("cm"))
+             .range(2, 200, 0.5);
+    f << Field(QStringLiteral("dpi"), QStringLiteral("integer"), tr("Raster resolution"))
+             .unit(QStringLiteral("dpi"))
+             .range(30, 2400, 1)
+             .when(QStringLiteral("formats"), QStringLiteral("!="), QStringLiteral("ps"));
   }
   return f;
 }
@@ -437,9 +527,10 @@ bool ProcessingViewModel::fieldVisible(const QString &key) const {
     if (op == QLatin1String(">"))
       return actual.toDouble() > expected.toDouble();
     if (op == QLatin1String("in")) {
-      for (const auto &e : expected.toList())
-        if (actual.toDouble() == e.toDouble())
+      for (const auto &e : expected.toList()) {
+        if (e.typeId() == QMetaType::QString ? actual.toString() == e.toString() : actual.toDouble() == e.toDouble())
           return true;
+      }
       return false;
     }
     bool equal = false;
@@ -461,6 +552,17 @@ QVariantList ProcessingViewModel::options(const QString &key) const {
       return f.value(QStringLiteral("options")).toList();
   }
   QVariantList out;
+  if (kind_ == QLatin1String("figure") && key == QLatin1String("source")) {
+    out.push_back(QVariantMap{{QStringLiteral("value"), QString()}, {QStringLiteral("label"), tr("The newest grid")}});
+    out.push_back(QVariantMap{{QStringLiteral("value"), QStringLiteral("none")},
+                              {QStringLiteral("label"), tr("None (survey lines only)")}});
+    if (project_ && project_->isOpen())
+      for (const auto &a : project_->assets())
+        if (a.type == "grid" || a.type == "mosaic" || a.type == "grid_num" || a.type == "grid_sd")
+          out.push_back(QVariantMap{{QStringLiteral("value"), QString::fromStdString(a.id)},
+                                    {QStringLiteral("label"), QString::fromStdString(a.label)}});
+    return out;
+  }
   if (kind_ == QLatin1String("export") && key == QLatin1String("source")) {
     out.push_back(QVariantMap{{QStringLiteral("value"), QStringLiteral("soundings")},
                               {QStringLiteral("label"), tr("Soundings of the selected survey lines")}});
@@ -552,6 +654,43 @@ ProcessingRequest ProcessingViewModel::request() const {
     p.extraGrids = flag(v, "extraGrids");
     p.projection = v.value(QStringLiteral("projection")).toString().toStdString();
     p.angleCorrection = flag(v, "angleCorrection");
+  } else if (kind_ == QLatin1String("figure")) {
+    FigureParameters &p = r.figure;
+    p.kind = v.value(QStringLiteral("template")).toString().toStdString();
+    const QString source = v.value(QStringLiteral("source")).toString();
+    if (source == QLatin1String("none") || p.kind == "overview") {
+      r.asset.clear();
+    } else if (source.isEmpty()) {
+      // the newest grid (a quality grid for the quality map)
+      if (project_ && project_->isOpen())
+        for (const auto &a : project_->assets()) {
+          const bool quality = a.type == "grid_num" || a.type == "grid_sd";
+          if ((p.kind == "quality" ? quality : a.type == "grid" && a.parent.empty()))
+            r.asset = a.id;
+        }
+    } else {
+      r.asset = source.toStdString();
+    }
+    p.formats.clear();
+    for (const auto &f : v.value(QStringLiteral("formats")).toString().split(QLatin1Char(','), Qt::SkipEmptyParts))
+      p.formats.push_back(f.trimmed().toStdString());
+    p.widthCm = num(v, "widthCm");
+    p.dpi = integer(v, "dpi");
+    p.palette = v.value(QStringLiteral("palette")).toString().toStdString();
+    p.reversePalette = flag(v, "reversePalette");
+    p.contourInterval = num(v, "contourInterval");
+    p.annotationInterval = num(v, "annotationInterval");
+    p.illumination = flag(v, "illumination");
+    p.showTracks = flag(v, "showTracks");
+    p.colorbar = flag(v, "colorbar");
+    p.scaleBar = flag(v, "scaleBar");
+    p.title = v.value(QStringLiteral("title")).toString().toStdString();
+    p.zLabel = v.value(QStringLiteral("zLabel")).toString().toStdString();
+    p.viewAzimuth = num(v, "viewAzimuth");
+    p.viewElevation = num(v, "viewElevation");
+    p.reliefHeightCm = num(v, "reliefHeightCm");
+    if (p.kind == "quality" && p.zLabel == "Depth (m)")
+      p.zLabel = "Soundings per cell";
   } else if (kind_ == QLatin1String("export")) {
     const QString source = v.value(QStringLiteral("source")).toString();
     if (source == QLatin1String("soundings")) {
@@ -566,6 +705,134 @@ ProcessingRequest ProcessingViewModel::request() const {
     }
   }
   return r;
+}
+
+bool ProcessingViewModel::loadRequest(qint64 sequence) {
+  ProcessingRequest r;
+  if (!project_ || !project_->request(sequence, r))
+    return false;
+  QString kind = QString::fromStdString(r.kind);
+  if (kind == QLatin1String("export-grid") || kind == QLatin1String("export-soundings"))
+    kind = QStringLiteral("export");
+  if (!kinds().contains(kind))
+    return false;
+  QVariantMap v = defaults(kind);
+  v[QStringLiteral("name")] = QString::fromStdString(r.name);
+  if (kind == QLatin1String("preprocess")) {
+    const PreprocessParameters &p = r.preprocess;
+    v[QStringLiteral("skipExisting")] = p.skipExisting;
+    v[QStringLiteral("recalculateBathymetry")] = p.recalculateBathymetry;
+    v[QStringLiteral("ignoreWaterColumn")] = p.ignoreWaterColumn;
+    v[QStringLiteral("navigationFile")] = QString::fromStdString(p.navigationFile);
+    v[QStringLiteral("navigationFormat")] = p.navigationFormat;
+    v[QStringLiteral("platformFile")] = QString::fromStdString(p.platformFile);
+  } else if (kind == QLatin1String("clean")) {
+    const CleanParameters &p = r.clean;
+    v[QStringLiteral("useSlope")] = p.useSlope;
+    v[QStringLiteral("slope")] = p.slope;
+    v[QStringLiteral("slopeMode")] = p.slopeMode;
+    v[QStringLiteral("outerBeams")] = p.outerBeams;
+    v[QStringLiteral("useDepthRange")] = p.useDepthRange;
+    v[QStringLiteral("depthMin")] = p.depthMin;
+    v[QStringLiteral("depthMax")] = p.depthMax;
+    v[QStringLiteral("useMedianFraction")] = p.useMedianFraction;
+    v[QStringLiteral("fractionLow")] = p.fractionLow;
+    v[QStringLiteral("fractionHigh")] = p.fractionHigh;
+    v[QStringLiteral("spikes")] = p.spikes;
+    v[QStringLiteral("spikeSlope")] = p.spikeSlope;
+    v[QStringLiteral("pingRms")] = p.pingRms;
+    v[QStringLiteral("areaClean")] = p.areaClean;
+    v[QStringLiteral("areaBinSize")] = p.areaBinSize;
+    v[QStringLiteral("areaStdDev")] = p.areaStdDev;
+  } else if (kind == QLatin1String("corrections")) {
+    const CorrectionParameters &p = r.corrections;
+    v[QStringLiteral("svpMode")] = p.svpMode;
+    v[QStringLiteral("svpFile")] = QString::fromStdString(p.svpFile);
+    v[QStringLiteral("useRollBias")] = p.useRollBias;
+    v[QStringLiteral("rollBias")] = p.rollBias;
+    v[QStringLiteral("usePitchBias")] = p.usePitchBias;
+    v[QStringLiteral("pitchBias")] = p.pitchBias;
+    v[QStringLiteral("useDraft")] = p.useDraft;
+    v[QStringLiteral("draft")] = p.draft;
+    v[QStringLiteral("tideMode")] = p.tideMode;
+    v[QStringLiteral("tideFile")] = QString::fromStdString(p.tideFile);
+    v[QStringLiteral("tideFormat")] = p.tideFormat;
+  } else if (kind == QLatin1String("process")) {
+    v[QStringLiteral("threads")] = r.process.threads;
+    v[QStringLiteral("force")] = r.process.force;
+  } else if (kind == QLatin1String("grid")) {
+    const GridParameters &p = r.grid;
+    v[QStringLiteral("dataType")] = p.dataType;
+    v[QStringLiteral("spacing")] = p.spacing;
+    v[QStringLiteral("units")] = QString::fromStdString(p.units);
+    v[QStringLiteral("algorithm")] = p.algorithm;
+    v[QStringLiteral("threshold")] = p.threshold;
+    v[QStringLiteral("clip")] = p.clip;
+    v[QStringLiteral("clipMode")] = p.clipMode;
+    v[QStringLiteral("tension")] = p.tension;
+    v[QStringLiteral("extraGrids")] = p.extraGrids;
+    v[QStringLiteral("projection")] = QString::fromStdString(p.projection);
+    v[QStringLiteral("boundsFactor")] = p.boundsFactor;
+  } else if (kind == QLatin1String("mosaic")) {
+    const MosaicParameters &p = r.mosaic;
+    v[QStringLiteral("dataType")] = p.dataType;
+    v[QStringLiteral("spacing")] = p.spacing;
+    v[QStringLiteral("prioritySource")] = p.prioritySource;
+    v[QStringLiteral("priorityRange")] = p.priorityRange;
+    v[QStringLiteral("clip")] = p.clip;
+    v[QStringLiteral("extraGrids")] = p.extraGrids;
+    v[QStringLiteral("projection")] = QString::fromStdString(p.projection);
+    v[QStringLiteral("angleCorrection")] = p.angleCorrection;
+  } else if (kind == QLatin1String("export")) {
+    if (r.kind == "export-grid") {
+      v[QStringLiteral("source")] = QString::fromStdString(r.asset);
+      v[QStringLiteral("gridFormat")] = QString::fromStdString(r.exporting.kind);
+      v[QStringLiteral("exaggeration")] = r.exporting.exaggeration;
+    } else {
+      v[QStringLiteral("source")] = QStringLiteral("soundings");
+      v[QStringLiteral("soundingFormat")] = QString::fromStdString(r.exporting.kind);
+      v[QStringLiteral("projection")] = QString::fromStdString(r.exporting.projection);
+    }
+  } else if (kind == QLatin1String("figure")) {
+    const FigureParameters &p = r.figure;
+    v[QStringLiteral("template")] = QString::fromStdString(p.kind);
+    v[QStringLiteral("source")] = r.asset.empty() ? QStringLiteral("none") : QString::fromStdString(r.asset);
+    QStringList formats;
+    for (const auto &f : p.formats)
+      formats << QString::fromStdString(f);
+    v[QStringLiteral("formats")] = formats.join(QLatin1Char(','));
+    v[QStringLiteral("widthCm")] = p.widthCm;
+    v[QStringLiteral("dpi")] = p.dpi;
+    v[QStringLiteral("palette")] = QString::fromStdString(p.palette);
+    v[QStringLiteral("reversePalette")] = p.reversePalette;
+    v[QStringLiteral("contourInterval")] = p.contourInterval;
+    v[QStringLiteral("annotationInterval")] = p.annotationInterval;
+    v[QStringLiteral("illumination")] = p.illumination;
+    v[QStringLiteral("showTracks")] = p.showTracks;
+    v[QStringLiteral("colorbar")] = p.colorbar;
+    v[QStringLiteral("scaleBar")] = p.scaleBar;
+    v[QStringLiteral("title")] = QString::fromStdString(p.title);
+    v[QStringLiteral("zLabel")] = QString::fromStdString(p.zLabel);
+    v[QStringLiteral("viewAzimuth")] = p.viewAzimuth;
+    v[QStringLiteral("viewElevation")] = p.viewElevation;
+    v[QStringLiteral("reliefHeightCm")] = p.reliefHeightCm;
+  }
+  values_[kind] = v;
+  // the same survey lines
+  if (projectModel_ != nullptr && !r.lines.empty()) {
+    QStringList ids;
+    for (const auto &id : r.lines)
+      ids << QString::fromStdString(id);
+    projectModel_->selectIds(ids);
+  }
+  if (kind_ != kind) {
+    kind_ = kind;
+    emit kindChanged();
+  }
+  revision_++;
+  emit parametersChanged();
+  updatePreview();
+  return true;
 }
 
 void ProcessingViewModel::updatePreview() {

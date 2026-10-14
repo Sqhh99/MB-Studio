@@ -2,29 +2,40 @@
 // singleton: settings, recent files, plugin information, the open project,
 // background jobs, the processing panels, the workbench documents and the
 // actions contributed by plugins.
+//
+// Documents: every grid, 3D terrain view, line inspector, sounding editor
+// and figure tab owns its own document object (GridViewModel,
+// TerrainViewModel, SwathViewModel, SoundingEditorModel), created by the
+// document factory of the workspace model, so documents of the same kind
+// are independent and can be compared side by side.
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QSettings>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
+#include <memory>
 
 namespace mbstudio {
 class Kernel;
-}
+class IGridService;
+class IGridRenderService;
+class ISwathService;
+class ISoundingService;
+class IProjectService;
+}  // namespace mbstudio
 
 namespace mbstudio::ui {
 
 class FormatListModel;
 class JobListModel;
 class JsonTranslator;
-class GridViewModel;
 class LogModel;
 class ProcessingViewModel;
 class ProjectViewModel;
-class SwathViewModel;
 class ToolsViewModel;
 class WorkspaceModel;
 
@@ -44,15 +55,18 @@ class AppController : public QObject {
   Q_PROPERTY(QVariantList commands READ commands CONSTANT)
   // menu actions contributed by plugins: [{id, title, menu, command, shortcut, icon}]
   Q_PROPERTY(QVariantList actions READ actions NOTIFY languageChanged)
+  Q_PROPERTY(QStringList colorMaps READ colorMaps CONSTANT)
   Q_PROPERTY(QObject *formats READ formats CONSTANT)
-  Q_PROPERTY(QObject *swath READ swath CONSTANT)
-  Q_PROPERTY(QObject *grid READ grid CONSTANT)
   Q_PROPERTY(QObject *tools READ tools CONSTANT)
   Q_PROPERTY(QObject *log READ log CONSTANT)
   Q_PROPERTY(QObject *project READ project CONSTANT)
   Q_PROPERTY(QObject *jobs READ jobs CONSTANT)
   Q_PROPERTY(QObject *processing READ processing CONSTANT)
   Q_PROPERTY(QObject *workspaces READ workspaces CONSTANT)
+  // sounding edits that are not saved yet (in any editor)
+  Q_PROPERTY(bool unsavedEdits READ unsavedEdits NOTIFY unsavedEditsChanged)
+  // cursor position of the active view, for the status bar
+  Q_PROPERTY(QString cursorText READ cursorText WRITE setCursorText NOTIFY cursorTextChanged)
 
  public:
   explicit AppController(Kernel *kernel, QObject *parent = nullptr);
@@ -72,19 +86,19 @@ class AppController : public QObject {
   QVariantList services() const;
   QVariantList commands() const;
   QVariantList actions() const;
+  QStringList colorMaps() const;
   QObject *formats() const;
-  QObject *swath() const;
-  QObject *grid() const;
   QObject *tools() const;
   QObject *log() const;
   QObject *project() const;
   QObject *jobs() const;
   QObject *processing() const;
   QObject *workspaces() const;
+  bool unsavedEdits() const;
+  QString cursorText() const { return cursorText_; }
+  void setCursorText(const QString &text);
 
   FormatListModel *formatModel() const { return formats_; }
-  SwathViewModel *swathModel() const { return swath_; }
-  GridViewModel *gridModel() const { return grid_; }
   ToolsViewModel *toolsModel() const { return tools_; }
   LogModel *logModel() const { return log_; }
   ProjectViewModel *projectModel() const { return project_; }
@@ -93,7 +107,7 @@ class AppController : public QObject {
   WorkspaceModel *workspaceModel() const { return workspaces_; }
 
   // Open a file where it belongs: projects (.mbsproj or a project folder)
-  // are opened, grids in the grid view, swath files in the line inspector,
+  // are opened, grids in a grid document, swath files in a line document,
   // datalists summarised with mbinfo. Returns the workspace used, or "".
   Q_INVOKABLE QString openFile(const QString &path);
   Q_INVOKABLE QString openUrl(const QUrl &url);
@@ -101,9 +115,17 @@ class AppController : public QObject {
   Q_INVOKABLE static QUrl toUrl(const QString &path);
   Q_INVOKABLE static bool isGridFile(const QString &path);
   Q_INVOKABLE static bool isProjectFile(const QString &path);
-  Q_INVOKABLE void openGrid(const QString &path);
+  // Documents; each returns its tab index (-1 on failure). group -1: the
+  // active group, 1: beside the active document (split view).
+  Q_INVOKABLE int openGrid(const QString &path, int group = -1);
+  Q_INVOKABLE int openTerrain(const QString &path, int group = -1);
+  // A survey line in a version (original, preprocessed, processed; "": the
+  // most processed one).
+  Q_INVOKABLE int inspectLine(const QString &lineId, const QString &version = QString());
+  // The sounding editor for survey lines (empty: the selected lines).
+  Q_INVOKABLE int openEditor(const QStringList &lineIds = QStringList());
+  Q_INVOKABLE int openFigure(const QString &assetId);
   Q_INVOKABLE void openWorkspace(const QString &workspace);
-  Q_INVOKABLE void inspectLine(const QString &lineId);
   Q_INVOKABLE void clearRecentFiles();
   Q_INVOKABLE void showInFolder(const QString &path) const;
   Q_INVOKABLE void openPath(const QString &path) const;
@@ -128,8 +150,11 @@ class AppController : public QObject {
   void notify(const QString &message);
   // a front end action ("newProject", "panel:grid", ...) for the QML shell
   void uiAction(const QString &name);
+  void unsavedEditsChanged();
+  void cursorTextChanged();
 
  private:
+  QObject *createDocument(const QString &workspace, const QString &argument, QObject *parent);
   void addRecent(const QString &path);
   void applyLanguage();
   void onProjectChanged();
@@ -141,9 +166,12 @@ class AppController : public QObject {
   QString effectiveLanguage_ = QStringLiteral("en");
   JsonTranslator *translator_ = nullptr;
   QStringList recentFiles_;
+  std::shared_ptr<IGridService> gridService_;
+  std::shared_ptr<IGridRenderService> renderService_;
+  std::shared_ptr<ISwathService> swathService_;
+  std::shared_ptr<ISoundingService> soundingService_;
+  std::shared_ptr<IProjectService> projectService_;
   FormatListModel *formats_ = nullptr;
-  SwathViewModel *swath_ = nullptr;
-  GridViewModel *grid_ = nullptr;
   ToolsViewModel *tools_ = nullptr;
   LogModel *log_ = nullptr;
   ProjectViewModel *project_ = nullptr;
@@ -153,6 +181,9 @@ class AppController : public QObject {
   QString openProjectFile_;
   QTimer saveWorkspaceTimer_;
   bool restoringWorkspace_ = false;
+  QString cursorText_;
+  // map layers of finished jobs whose completion is reported when drawn
+  QHash<QString, QString> pendingLayerNotices_;
 };
 
 }  // namespace mbstudio::ui

@@ -1,48 +1,59 @@
 // MB-Studio visual design tokens (colours, spacing, typography).
+//
+// Neutral dark-grey and light-grey themes with compact rows, fine
+// separators and small corner radii; the accent marks selection, focus and
+// the active tool, and strong status colours are kept for warnings and
+// failures, so that the data views carry the colour.
 pragma Singleton
 import QtQuick
 
 QtObject {
     property bool dark: true
 
-    readonly property color background: dark ? "#0E151D" : "#F3F5F8"
-    readonly property color sidebar: dark ? "#0A1118" : "#E8EDF2"
-    readonly property color surface: dark ? "#151F2A" : "#FFFFFF"
-    readonly property color surfaceAlt: dark ? "#1B2836" : "#F0F3F7"
-    readonly property color surfaceHover: dark ? "#223244" : "#E6EBF1"
-    readonly property color border: dark ? "#243344" : "#DCE2E9"
-    readonly property color text: dark ? "#E3EAF1" : "#17212B"
-    readonly property color textMuted: dark ? "#8497AA" : "#5E6E7E"
-    readonly property color textFaint: dark ? "#5D6F81" : "#93A1AF"
+    readonly property color background: dark ? "#1E1F22" : "#F2F3F5"
+    readonly property color sidebar: dark ? "#191A1C" : "#E8E9EC"
+    readonly property color surface: dark ? "#25272A" : "#FFFFFF"
+    readonly property color surfaceAlt: dark ? "#2B2D31" : "#F5F6F8"
+    readonly property color surfaceHover: dark ? "#33363B" : "#E6E8EB"
+    readonly property color border: dark ? "#383B40" : "#D4D7DC"
+    readonly property color text: dark ? "#DFE1E5" : "#1F2328"
+    readonly property color textMuted: dark ? "#9A9EA6" : "#5A616B"
+    readonly property color textFaint: dark ? "#6C7078" : "#8E949C"
 
-    readonly property color accent: "#1FB6C9"        // ocean teal
-    readonly property color accentStrong: "#1E88E5"  // sea blue
-    readonly property color accentSoft: dark ? "#163845" : "#DDF4F7"
-    readonly property color success: "#2EBD85"
-    readonly property color warning: "#F2A93B"
-    readonly property color danger: "#E5534B"
-    readonly property color info: "#5B9BF0"
+    readonly property color accent: dark ? "#4C9BE8" : "#2E7BD1"   // selection, focus, active tool
+    readonly property color accentStrong: dark ? "#3A84CF" : "#2468B5"
+    readonly property color accentSoft: dark ? "#263A50" : "#DCE9F7"
+    readonly property color success: "#3FA66B"
+    readonly property color warning: "#D99A2B"
+    readonly property color danger: "#D9534F"
+    readonly property color info: "#4C9BE8"
 
     // workbench chrome
-    readonly property color panel: dark ? "#111A23" : "#F8FAFC"
-    readonly property color panelHeader: dark ? "#16212C" : "#EEF2F6"
-    readonly property color tabActive: dark ? "#1B2836" : "#FFFFFF"
-    readonly property color selection: dark ? "#1A4152" : "#D3EEF3"
-    readonly property color mapBackground: dark ? "#081018" : "#DFE6EC"
-    readonly property color consoleBackground: dark ? "#0A1016" : "#1D2630"
-    readonly property color consoleText: "#D5E2EE"
+    readonly property color titleBar: dark ? "#161719" : "#E1E3E6"
+    readonly property color titleBarInactive: dark ? "#1C1D20" : "#ECEDEF"
+    readonly property color panel: dark ? "#222326" : "#F7F8FA"
+    readonly property color panelHeader: dark ? "#26282B" : "#ECEDF0"
+    readonly property color tabActive: dark ? "#2C2E32" : "#FFFFFF"
+    readonly property color selection: dark ? "#2D4A66" : "#CFE2F7"
+    readonly property color mapBackground: dark ? "#141517" : "#E3E5E8"
+    readonly property color consoleBackground: dark ? "#141517" : "#1F2328"
+    readonly property color consoleText: "#D7DADF"
+    readonly property color overlay: dark ? Qt.rgba(0.08, 0.08, 0.09, 0.82) : Qt.rgba(1, 1, 1, 0.88)
+    readonly property color overlayText: dark ? "#E6E8EB" : "#1F2328"
 
-    readonly property int radius: 10
-    readonly property int radiusSmall: 6
-    readonly property int spacing: 12
-    readonly property int pagePadding: 24
-    readonly property int panelPadding: 12
-    readonly property int rowHeight: 30
+    readonly property int radius: 4
+    readonly property int radiusSmall: 3
+    readonly property int spacing: 8
+    readonly property int pagePadding: 12
+    readonly property int panelPadding: 10
+    readonly property int rowHeight: 26
+    readonly property int titleBarHeight: 34
+    readonly property int toolBarHeight: 32
 
     readonly property int fontSmall: 11
-    readonly property int fontBody: 13
-    readonly property int fontTitle: 17
-    readonly property int fontHeadline: 24
+    readonly property int fontBody: 12
+    readonly property int fontTitle: 15
+    readonly property int fontHeadline: 20
     readonly property string monoFont: Qt.platform.os === "windows" ? "Consolas"
                                      : Qt.platform.os === "osx" ? "Menlo" : "DejaVu Sans Mono"
 
@@ -60,5 +71,21 @@ QtObject {
         if (level === "warning") return warning
         if (level === "debug") return textFaint
         return accent
+    }
+
+    // colour of a survey line's processing status
+    function lineStatusColor(status, missing) {
+        if (missing) return danger
+        if (status === "processed") return success
+        if (status === "edits-pending" || status === "corrections-pending" || status === "processing-required") return warning
+        return textFaint
+    }
+
+    // colour of a product's status
+    function productStatusColor(status) {
+        if (status === "outdated") return danger
+        if (status === "pending") return warning
+        if (status === "current") return success
+        return textFaint
     }
 }

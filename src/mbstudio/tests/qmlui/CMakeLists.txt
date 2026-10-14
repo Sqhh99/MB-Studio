@@ -23,6 +23,7 @@ mb_set_test_environment(mbstudio_qmlui_test)
 # QT_FORCE_STDERR_LOGGING: on Windows Qt otherwise sends its messages to the
 # debugger when no console window is attached (as on CI), hiding failures.
 set(_qt_env "QT_QPA_PLATFORM=offscreen" "QT_QUICK_BACKEND=software" "QT_QUICK_CONTROLS_STYLE=Material"
+            "QT_QUICK_CONTROLS_MATERIAL_VARIANT=Dense"
             "QT_FORCE_STDERR_LOGGING=1")
 if(DEFINED QT6_INSTALL_PREFIX)
   list(APPEND _qt_env

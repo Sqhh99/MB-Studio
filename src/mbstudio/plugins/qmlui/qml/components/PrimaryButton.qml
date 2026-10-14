@@ -8,11 +8,11 @@ import ".."
 Button {
     id: control
     property color fill: Theme.accent
-    property color textColor: "#06222A"
+    property color textColor: "#FFFFFF"
     hoverEnabled: true
-    implicitHeight: 38
-    leftPadding: 18
-    rightPadding: 18
+    implicitHeight: 30
+    leftPadding: 14
+    rightPadding: 14
     font.weight: Font.DemiBold
     font.pixelSize: Theme.fontBody
 
@@ -26,7 +26,7 @@ Button {
     }
     background: Rectangle {
         implicitWidth: 88
-        radius: 8
+        radius: Theme.radius
         color: !control.enabled ? Theme.surfaceAlt
              : control.down ? Qt.darker(control.fill, 1.15)
              : control.hovered ? Qt.lighter(control.fill, 1.08) : control.fill

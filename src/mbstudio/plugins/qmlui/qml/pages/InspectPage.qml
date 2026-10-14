@@ -1,4 +1,5 @@
-// Swath file inspector: summary statistics, navigation and depth profile.
+// Swath file inspector: summary statistics, navigation and depth profile of
+// one version of a survey line (original, preprocessed or processed).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -8,8 +9,9 @@ import "../components"
 
 Item {
     id: page
-    readonly property var swath: App.swath
-    readonly property var s: swath.summary
+    property var swath: null
+    readonly property var s: swath !== null ? swath.summary : ({})
+    readonly property bool ready: swath !== null
 
     function fmt(v, digits) { return v === undefined ? "–" : Number(v).toFixed(digits) }
     function duration(hours) {
@@ -22,10 +24,10 @@ Item {
 
     EmptyState {
         anchors.centerIn: parent
-        visible: !swath.loaded && !swath.busy
+        visible: !page.ready || (!swath.loaded && !swath.busy)
         iconPath: Icons.waves
-        title: swath.error !== "" ? qsTr("The file could not be read") : qsTr("Inspect a swath sonar file")
-        message: swath.error !== "" ? swath.error
+        title: page.ready && swath.error !== "" ? qsTr("The file could not be read") : qsTr("Inspect a swath sonar file")
+        message: page.ready && swath.error !== "" ? swath.error
                  : qsTr("Open a file in any of the formats supported by MB-System (for example .all, .kmall, .s7k, .gsf, .mb88) to see its statistics, navigation and depth profile.")
         actionText: qsTr("Open swath file…")
         onAction: App.trigger("ui:openFile")
@@ -33,16 +35,16 @@ Item {
 
     ColumnLayout {
         anchors.centerIn: parent
-        visible: swath.busy
+        visible: page.ready && swath.busy
         spacing: 12
-        BusyIndicator { running: swath.busy; Layout.alignment: Qt.AlignHCenter }
-        Text { text: qsTr("Reading %1…").arg(swath.fileName); color: Theme.textMuted; font.pixelSize: Theme.fontBody }
+        BusyIndicator { running: page.ready && swath.busy; Layout.alignment: Qt.AlignHCenter }
+        Text { text: page.ready ? qsTr("Reading %1…").arg(swath.fileName) : ""; color: Theme.textMuted; font.pixelSize: Theme.fontBody }
         Button { text: qsTr("Cancel"); flat: true; Layout.alignment: Qt.AlignHCenter; onClicked: swath.cancel() }
     }
 
     ScrollView {
         anchors.fill: parent
-        visible: swath.loaded && !swath.busy
+        visible: page.ready && swath.loaded && !swath.busy
         contentWidth: availableWidth
         clip: true
 
@@ -62,7 +64,7 @@ Item {
                     RowLayout {
                         spacing: 10
                         Text {
-                            text: swath.fileName
+                            text: page.ready ? swath.fileName : ""
                             color: Theme.text
                             font.pixelSize: Theme.fontHeadline
                             font.weight: Font.DemiBold
@@ -71,9 +73,15 @@ Item {
                         }
                         Chip { text: "MBIO " + (s.format || ""); tint: Theme.accent }
                         Chip { text: s.formatName || ""; tint: Theme.accentStrong }
+                        Chip {
+                            objectName: "versionChip"
+                            visible: page.ready && swath.version !== ""
+                            text: page.ready ? (swath.version === "processed" ? qsTr("processed") : swath.version === "preprocessed" ? qsTr("preprocessed") : qsTr("original")) : ""
+                            tint: page.ready && swath.version === "processed" ? Theme.success : Theme.textMuted
+                        }
                     }
                     Text {
-                        text: swath.path
+                        text: page.ready ? swath.path : ""
                         color: Theme.textFaint
                         font.pixelSize: Theme.fontSmall
                         elide: Text.ElideMiddle
@@ -82,7 +90,7 @@ Item {
                 }
                 Button { text: qsTr("mbinfo"); onClicked: App.runToolOn("mbinfo", swath.path) }
                 Button { text: qsTr("mblist"); onClicked: App.runToolOn("mblist", swath.path) }
-                IconButton { iconPath: Icons.refresh; tip: qsTr("Read again"); onClicked: swath.inspect(swath.path) }
+                IconButton { iconPath: Icons.refresh; tip: qsTr("Read again"); onClicked: swath.inspect(swath.path, s.format || 0) }
                 IconButton { iconPath: Icons.folderOpen; tip: qsTr("Show in folder"); onClicked: App.showInFolder(swath.path) }
             }
 
@@ -117,7 +125,7 @@ Item {
                         TrackPlot {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            points: swath.track
+                            points: page.ready ? swath.track : []
                             geographic: true
                             lineColor: Theme.accent
                             axisColor: Theme.border
@@ -177,7 +185,7 @@ Item {
                     TrackPlot {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        points: swath.profile
+                        points: page.ready ? swath.profile : []
                         geographic: false
                         invertY: true
                         xLabel: qsTr("seconds since start of file")

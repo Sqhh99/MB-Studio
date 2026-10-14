@@ -9,7 +9,7 @@ Rectangle {
     id: root
     property var job: ({})
     signal showLog(var job)
-    implicitHeight: content.implicitHeight + 14
+    implicitHeight: content.implicitHeight + 10
     color: mouse.containsMouse ? Theme.surfaceHover : "transparent"
     readonly property bool active: job.state === "running" || job.state === "queued"
 
@@ -64,6 +64,7 @@ Rectangle {
                 color: root.job.state === "failed" ? Theme.danger : Theme.textMuted
                 font.pixelSize: Theme.fontSmall
                 text: root.job.state === "failed" ? root.job.error
+                      : root.job.state === "queued" && root.job.blockedBy > 0 ? qsTr("Waiting for job %1 (it uses the same survey lines or files)").arg(root.job.blockedBy)
                       : root.job.state === "queued" ? qsTr("Waiting for a free worker")
                       : root.job.state === "running" ? qsTr("Step %1 of %2: %3").arg(root.job.step).arg(root.job.stepCount).arg(root.job.stepTitle)
                       : root.job.state === "cancelled" ? qsTr("Cancelled")
@@ -88,7 +89,7 @@ Rectangle {
         IconButton {
             iconPath: Icons.refresh
             tip: qsTr("Run again")
-            visible: root.job.state === "failed" || root.job.state === "cancelled"
+            visible: root.job.canRetry === true
             onClicked: App.jobs.retry(root.job.jobId)
         }
         IconButton {
