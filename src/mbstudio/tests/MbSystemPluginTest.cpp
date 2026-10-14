@@ -16,6 +16,7 @@
 #include "MbSystemPlugin.h"
 #include "MbioServices.h"
 #include "mbstudio/kernel/Kernel.h"
+#include "mbstudio/platform/Geodesy.h"
 #include "mbstudio/platform/Paths.h"
 
 using namespace mbstudio;
@@ -32,6 +33,16 @@ std::string scratch(const std::string &name) {
   const std::string dir = platform::joinPath(platform::executableDirectory(), "mbstudio-test-scratch");
   platform::makeDirectories(dir);
   return platform::joinPath(dir, name);
+}
+
+// The same two pings in MB-System's own processing format (writable by mbprocess).
+std::string testData71() {
+  return platform::joinPath(MBSTUDIO_SOURCE_DIR, "test/utilities/testdata/mb71/TN136HS.309.snipped.mb71");
+}
+
+bool copyFile(const std::string &from, const std::string &to) {
+  std::string data;
+  return platform::readTextFile(from, data) && platform::writeTextFile(to, data);
 }
 
 std::vector<std::string> toolDirs() { return {MBSTUDIO_TOOL_DIR}; }
@@ -231,6 +242,26 @@ TEST(ToolService, GridsSwathDataWithMbgrid) {
   EXPECT_GT(g.grid.zmin, -470.0);  // mbgrid writes topography (negative depth)
   GridRenderService render;
   EXPECT_EQ(47 * 31, static_cast<int>(render.render(g.grid, RenderOptions()).pixels.size()));
+
+  // the same data in UTM: the grid records its projection
+  output.clear();
+  const auto u = tools.run("mbgrid",
+                           {"-I" + datalist, "-O" + scratch("bathy-utm"), "-E20/0/meters!", "-A2", "-N", "-JU",
+                            "-R-124.507/-124.496/40.835/40.842"},
+                           std::string(), [&](const std::string &chunk) { output += chunk; });
+  ASSERT_TRUE(u.started) << u.error;
+  ASSERT_EQ(0, u.exitCode) << output;
+  const GridLoadResult projected = grids.load(scratch("bathy-utm.grd"));
+  ASSERT_TRUE(projected.ok) << projected.error;
+  EXPECT_FALSE(projected.grid.geographic);
+  EXPECT_EQ("UTM10N", projected.grid.projection);
+  // its corner lies where the geographic grid is
+  const platform::MapProjection utm = platform::MapProjection::parse(projected.grid.projection);
+  ASSERT_TRUE(utm.valid());
+  double lon = 0.0, lat = 0.0;
+  ASSERT_TRUE(utm.inverse(projected.grid.xmin, projected.grid.ymin, lon, lat));
+  EXPECT_NEAR(-124.507, lon, 0.01);
+  EXPECT_NEAR(40.835, lat, 0.01);
 }
 
 TEST(ProcessingService, GridArgumentsAreExplicit) {
@@ -514,6 +545,297 @@ TEST(JobService, RunsStepsCancelsAndRetries) {
   EXPECT_TRUE(jobs.jobs().empty());
 }
 
+namespace {
+
+// A step that records when it ran.
+struct Interval {
+  std::atomic<double> start{0.0}, end{0.0};
+};
+
+double seconds() {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+JobSpec timedJob(Interval &interval, std::vector<std::string> writes, std::vector<std::string> reads = {},
+                 int milliseconds = 300) {
+  JobSpec spec;
+  spec.workingDirectory = scratch("timed jobs");
+  spec.writes = std::move(writes);
+  spec.reads = std::move(reads);
+  JobStep step;
+  step.title = "sleep";
+  step.action = [&interval, milliseconds](std::string &) {
+    interval.start = seconds();
+    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+    interval.end = seconds();
+    return true;
+  };
+  spec.steps = {step};
+  return spec;
+}
+
+// Records the environment a program was started with.
+class EnvironmentTools : public IToolService {
+ public:
+  mutable std::vector<std::pair<std::string, std::string>> environment;
+  std::vector<ToolInfo> tools() const override { return {ToolInfo{"gmt", "Plotting", "", "", "/bin/gmt", true}}; }
+  bool tool(const std::string &name, ToolInfo &info) const override {
+    info = tools().front();
+    return name == "gmt";
+  }
+  std::vector<std::string> categories() const override { return {"Plotting"}; }
+  platform::ProcessResult run(const std::string &, const std::vector<std::string> &, const std::string &,
+                              const platform::OutputHandler &, const std::atomic<bool> *) const override {
+    platform::ProcessResult r;
+    r.started = true;
+    r.exitCode = 0;
+    return r;
+  }
+  platform::ProcessResult runWithEnvironment(const std::string &name, const std::vector<std::string> &arguments,
+                                             const std::string &cwd,
+                                             const std::vector<std::pair<std::string, std::string>> &env,
+                                             const platform::OutputHandler &output,
+                                             const std::atomic<bool> *cancel) const override {
+    environment = env;
+    return run(name, arguments, cwd, output, cancel);
+  }
+};
+
+}  // namespace
+
+// Jobs that write the same survey line or file never run at the same time
+// and keep their order; independent jobs run in parallel.
+TEST(JobService, SerialisesConflictingJobs) {
+  JobService jobs(nullptr, nullptr, 3);
+  Interval a, b, c, d;
+  const auto ia = jobs.submit(timedJob(a, {"line:L1"}));
+  const auto ib = jobs.submit(timedJob(b, {"line:L1"}));             // waits for a
+  const auto ic = jobs.submit(timedJob(c, {"line:L2"}));             // independent
+  const auto id = jobs.submit(timedJob(d, {}, {"line:L1"}, 50));     // reads what a and b write
+  ASSERT_NE(0, ia);
+  JobInfo info;
+  ASSERT_TRUE(jobs.job(ib, info));
+  EXPECT_EQ(ia, info.blockedBy);
+  ASSERT_TRUE(jobs.job(id, info));
+  EXPECT_NE(0, info.blockedBy);
+  for (const auto job : {ia, ib, ic, id})
+    ASSERT_TRUE(jobs.wait(job, 30000));
+  EXPECT_GE(b.start.load(), a.end.load());   // never at the same time
+  EXPECT_GE(d.start.load(), b.end.load());   // in the order they were submitted
+  EXPECT_LT(c.start.load(), a.end.load());   // independent work went on
+  ASSERT_TRUE(jobs.job(ib, info));
+  EXPECT_EQ(JobState::Completed, info.state);
+  EXPECT_EQ(std::vector<std::string>{"line:L1"}, info.writes);
+  EXPECT_TRUE(jobsConflict(timedJob(a, {"file:x"}), timedJob(b, {}, {"file:x"})));
+  EXPECT_FALSE(jobsConflict(timedJob(a, {}, {"file:x"}), timedJob(b, {}, {"file:x"})));  // readers share
+}
+
+TEST(JobService, OwnersDecideAboutRetriesAndEnvironment) {
+  auto tools = std::make_shared<EnvironmentTools>();
+  JobService jobs(tools, nullptr, 1);
+  JobSpec spec;
+  spec.workingDirectory = scratch("env jobs");
+  spec.retryable = false;
+  JobStep step;
+  step.title = "gmt";
+  step.tool = "gmt";
+  step.arguments = {"--version"};
+  step.environment = {{"GMT_SESSION_NAME", "mbstudio-job-7"}};
+  spec.steps = {step};
+  const auto id = jobs.submit(spec);
+  ASSERT_NE(0, id);
+  ASSERT_TRUE(jobs.wait(id, 30000));
+  JobInfo info;
+  ASSERT_TRUE(jobs.job(id, info));
+  EXPECT_EQ(JobState::Completed, info.state) << info.error;
+  ASSERT_EQ(1u, tools->environment.size());
+  EXPECT_EQ("mbstudio-job-7", tools->environment[0].second);
+  EXPECT_FALSE(info.retryable);
+  EXPECT_EQ(0, jobs.retry(id));  // the owner repeats it with new outputs
+}
+
+TEST(GridService, ReadsTheProjectionOfProjectedGrids) {
+  const std::string path = scratch("projected.grd");
+  int ncid, xdim, ydim, xvar, yvar, zvar;
+  ASSERT_EQ(NC_NOERR, nc_create(path.c_str(), NC_CLOBBER, &ncid));
+  nc_def_dim(ncid, "x", 3, &xdim);
+  nc_def_dim(ncid, "y", 2, &ydim);
+  nc_def_var(ncid, "x", NC_DOUBLE, 1, &xdim, &xvar);
+  nc_def_var(ncid, "y", NC_DOUBLE, 1, &ydim, &yvar);
+  int dims[2] = {ydim, xdim};
+  nc_def_var(ncid, "z", NC_FLOAT, 2, dims, &zvar);
+  const std::string remark = "\n\tProjection: UTM10N\n\tGrid created by program mbgrid\n";
+  nc_put_att_text(ncid, NC_GLOBAL, "description", remark.size(), remark.c_str());
+  nc_enddef(ncid);
+  const double x[3] = {500000.0, 500100.0, 500200.0};
+  const double y[2] = {4500000.0, 4500100.0};
+  const float z[6] = {-10, -11, -12, -13, -14, -15};
+  nc_put_var_double(ncid, xvar, x);
+  nc_put_var_double(ncid, yvar, y);
+  nc_put_var_float(ncid, zvar, z);
+  nc_close(ncid);
+  GridService grids;
+  const GridLoadResult r = grids.load(path);
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_FALSE(r.grid.geographic);
+  EXPECT_EQ("UTM10N", r.grid.projection);
+  // a geographic grid has none
+  EXPECT_TRUE(grids.load(writeTestGrid()).grid.projection.empty());
+}
+
+// Sounding edits: the saved edits of the edit save file are applied when the
+// soundings are read, new edits are appended to it, and the mbprocess
+// parameter file is set to use it.
+TEST(SoundingService, AppliesAndSavesEditEvents) {
+  const std::string dir = scratch("soundings");
+  platform::makeDirectories(dir);
+  const std::string file = platform::joinPath(dir, "line.mb71");
+  platform::removeFile(file + ".esf");
+  platform::removeFile(file + ".par");
+  ASSERT_TRUE(copyFile(testData71(), file));
+  SoundingService service(std::make_shared<FormatService>());
+  SoundingSet set = service.load(file, 71, 0);
+  ASSERT_TRUE(set.ok) << set.error;
+  EXPECT_EQ(71, set.format);
+  ASSERT_EQ(2u, set.pings.size());
+  ASSERT_GT(set.size(), 10u);
+  EXPECT_TRUE(set.esfPath.empty());  // nothing saved yet
+  EXPECT_EQ(set.size(), set.lon.size());
+  EXPECT_EQ(set.size(), set.depth.size());
+  // the first good sounding of each ping
+  std::vector<BeamEdit> edits;
+  std::vector<std::size_t> indices;
+  for (const auto &ping : set.pings)
+    for (std::uint32_t k = 0; k < ping.beams; k++)
+      if (beamflag::isGood(set.flag[ping.first + k])) {
+        edits.push_back(BeamEdit{ping.time, ping.multiplicity, static_cast<int>(k), BeamAction::Flag});
+        indices.push_back(ping.first + k);
+        break;
+      }
+  ASSERT_EQ(2u, edits.size());
+  std::string error, esf;
+  ASSERT_TRUE(service.saveEdits(file, 71, edits, error, &esf)) << error;
+  EXPECT_NE(std::string::npos, esf.find("line.mb71.esf"));
+  EXPECT_TRUE(platform::fileExists(file + ".esf"));
+  std::string par;
+  ASSERT_TRUE(platform::readTextFile(file + ".par", par));
+  EXPECT_NE(std::string::npos, par.find("EDITSAVEMODE"));
+  EXPECT_NE(std::string::npos, par.find("EDITSAVEFILE"));
+
+  set = service.load(file, 71, 0);
+  ASSERT_TRUE(set.ok) << set.error;
+  EXPECT_FALSE(set.esfPath.empty());
+  EXPECT_EQ(2, set.savedEdits);
+  for (const auto i : indices) {
+    EXPECT_TRUE(beamflag::isFlagged(set.flag[i]));
+    EXPECT_TRUE(set.flag[i] & beamflag::kManual);
+  }
+  // a later event overrides an earlier one
+  for (auto &e : edits)
+    e.action = BeamAction::Unflag;
+  ASSERT_TRUE(service.saveEdits(file, 71, edits, error)) << error;
+  set = service.load(file, 71, 0);
+  for (const auto i : indices)
+    EXPECT_TRUE(beamflag::isGood(set.flag[i]));
+  // the limit keeps whole pings
+  const SoundingSet limited = service.load(file, 71, set.pings[0].beams);
+  EXPECT_TRUE(limited.truncated);
+  EXPECT_EQ(1u, limited.pings.size());
+  EXPECT_FALSE(service.load(scratch("missing.mb71"), 71, 0).ok);
+}
+
+TEST(ProcessingService, GmtFigureRecipes) {
+  ProcessingService processing;
+  FigureParameters p;
+  p.grid = "../../products/grids/bathy.grd";
+  p.outputRoot = "../../products/figures/bathy";
+  p.formats = {"ps"};
+  p.contourInterval = 50;
+  p.annotationInterval = 250;
+  p.title = "Survey";
+  p.session = "mbstudio-job-3";
+  p.temporaryDirectory = "/survey/jobs/3";
+  p.gridBounds = GeoBounds{-124.507, -124.496, 40.835, 40.842};
+  CommandPlan plan = processing.figure(p);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_GE(plan.steps.size(), 5u);
+  EXPECT_EQ("gmt", plan.steps.front().tool);
+  EXPECT_EQ((std::vector<std::string>{"begin", "../../products/figures/bathy", "ps"}), plan.steps.front().arguments);
+  EXPECT_EQ(std::vector<std::string>{"end"}, plan.steps.back().arguments);
+  std::string all;
+  for (const auto &step : plan.steps) {
+    // every call joins the private session of the job
+    ASSERT_EQ(2u, step.environment.size());
+    EXPECT_EQ("GMT_SESSION_NAME", step.environment[0].first);
+    EXPECT_EQ("mbstudio-job-3", step.environment[0].second);
+    EXPECT_EQ("GMT_TMPDIR", step.environment[1].first);
+    for (const auto &a : step.arguments)
+      all += a + " ";
+    all += "\n";
+  }
+  EXPECT_NE(std::string::npos, all.find("grdimage ../../products/grids/bathy.grd -JM16c"));
+  EXPECT_NE(std::string::npos, all.find("grdcontour ../../products/grids/bathy.grd -C50"));
+  EXPECT_NE(std::string::npos, all.find("-A250"));
+  EXPECT_NE(std::string::npos, all.find("-BWSne+tSurvey"));
+  EXPECT_NE(std::string::npos, all.find("colorbar"));
+  EXPECT_NE(std::string::npos, all.find("-LjBL+w0.1k"));  // about a fifth of a 0.93 km wide map
+  EXPECT_EQ(std::vector<std::string>{"../../products/figures/bathy.ps"}, plan.outputs);
+
+  // projected grids: a Cartesian map in metres, no scale bar
+  p.geographic = false;
+  plan = processing.figure(p);
+  ASSERT_TRUE(plan.ok);
+  all.clear();
+  for (const auto &step : plan.steps)
+    for (const auto &a : step.arguments)
+      all += a + " ";
+  EXPECT_NE(std::string::npos, all.find("-JX16c/0"));
+  EXPECT_EQ(std::string::npos, all.find("-Lj"));
+
+  // perspective view and survey overview
+  p.kind = "perspective";
+  plan = processing.figure(p);
+  ASSERT_TRUE(plan.ok);
+  bool view = false;
+  for (const auto &step : plan.steps)
+    view = view || (!step.arguments.empty() && step.arguments[0] == "grdview");
+  EXPECT_TRUE(view);
+  FigureParameters overview;
+  overview.kind = "overview";
+  overview.outputRoot = "overview";
+  overview.formats = {"ps"};
+  overview.tracks = {"line1.mb71.fnv", "line2.mb71.fnv"};
+  EXPECT_FALSE(processing.figure(overview).ok);  // extent not known yet
+  overview.region = GeoBounds{-124.51, -124.49, 40.83, 40.85};
+  plan = processing.figure(overview);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  all.clear();
+  for (const auto &step : plan.steps)
+    for (const auto &a : step.arguments)
+      all += a + " ";
+  EXPECT_NE(std::string::npos, all.find("plot line1.mb71.fnv line2.mb71.fnv -i7,8"));
+
+  // errors and dependencies
+  FigureParameters bad = p;
+  bad.kind = "poster";
+  EXPECT_FALSE(processing.figure(bad).ok);
+  bad = p;
+  bad.grid.clear();
+  bad.kind = "bathymetry";
+  EXPECT_FALSE(processing.figure(bad).ok);
+  bad = p;
+  bad.formats = {"gif"};
+  EXPECT_FALSE(processing.figure(bad).ok);
+  bad = p;
+  bad.formats = {"png"};
+  bad.ghostscript.clear();
+  const bool ghostscript = !ProcessingService::findGhostscript({}).empty();
+  EXPECT_EQ(ghostscript, processing.figure(bad).ok);  // PNG needs Ghostscript
+  EXPECT_DOUBLE_EQ(5.0, ProcessingService::scaleBarKm(37.0));
+  EXPECT_DOUBLE_EQ(0.5, ProcessingService::scaleBarKm(3.0));
+  EXPECT_DOUBLE_EQ(2.0, ProcessingService::scaleBarKm(10.0));
+}
+
 TEST(HelpService, EveryProgramHasPagesInAllLanguages) {
   HelpService help(std::vector<std::string>{MBSTUDIO_HELP_DIR});
   ASSERT_EQ(MBSTUDIO_HELP_DIR, help.directory());
@@ -557,6 +879,7 @@ TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   EXPECT_TRUE(kernel.services().has<IToolService>());
   EXPECT_TRUE(kernel.services().has<IJobService>());
   EXPECT_TRUE(kernel.services().has<IProcessingService>());
+  EXPECT_TRUE(kernel.services().has<ISoundingService>());
 
   auto r = kernel.commands().execute("swath.inspect", {{"path", testData()}});
   ASSERT_TRUE(r.ok) << r.message;
@@ -576,6 +899,11 @@ TEST(MbSystemPlugin, CommandsThroughTheKernel) {
   ASSERT_TRUE(r.ok) << r.message;
   EXPECT_NE(std::string::npos, getString(r.data, "command").find("-E50/50/meters!"));
   EXPECT_TRUE(kernel.commands().execute("jobs.list").ok);
+  r = kernel.commands().execute("soundings.info", {{"path", testData71()}});
+  ASSERT_TRUE(r.ok) << r.message;
+  EXPECT_EQ(2, getInt(r.data, "pings"));
+  EXPECT_GT(getInt(r.data, "good"), 0);
+  EXPECT_TRUE(kernel.commands().execute("figure.check").ok);
   ASSERT_TRUE(kernel.services().has<IHelpService>());
   r = kernel.commands().execute("help.show", {{"name", std::string("mbgrid")}, {"lang", std::string("ja")}});
   ASSERT_TRUE(r.ok) << r.message;

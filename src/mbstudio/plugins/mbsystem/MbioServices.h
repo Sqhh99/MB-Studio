@@ -17,6 +17,7 @@
 #include "mbstudio/api/HelpService.h"
 #include "mbstudio/api/JobService.h"
 #include "mbstudio/api/ProcessingService.h"
+#include "mbstudio/api/SoundingService.h"
 #include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/EventBus.h"
 
@@ -54,6 +55,18 @@ class SwathService : public ISwathService {
   std::shared_ptr<IFormatService> formats_;
 };
 
+class SoundingService : public ISoundingService {
+ public:
+  explicit SoundingService(std::shared_ptr<IFormatService> formats) : formats_(std::move(formats)) {}
+  SoundingSet load(const std::string &path, int format, std::size_t maxSoundings,
+                   const std::atomic<bool> *cancel = nullptr) const override;
+  bool saveEdits(const std::string &path, int format, const std::vector<BeamEdit> &edits, std::string &error,
+                 std::string *esfPath = nullptr) const override;
+
+ private:
+  std::shared_ptr<IFormatService> formats_;
+};
+
 class GridService : public IGridService {
  public:
   GridLoadResult load(const std::string &path) const override;
@@ -76,6 +89,11 @@ class ToolService : public IToolService {
   platform::ProcessResult run(const std::string &name, const std::vector<std::string> &arguments,
                               const std::string &workingDirectory, const platform::OutputHandler &output,
                               const std::atomic<bool> *cancel = nullptr) const override;
+  platform::ProcessResult runWithEnvironment(const std::string &name, const std::vector<std::string> &arguments,
+                                             const std::string &workingDirectory,
+                                             const std::vector<std::pair<std::string, std::string>> &environment,
+                                             const platform::OutputHandler &output,
+                                             const std::atomic<bool> *cancel = nullptr) const override;
 
   // The built-in catalogue of MB-System programs (independent of installation).
   static const std::vector<ToolInfo> &catalog();
@@ -89,6 +107,7 @@ class ToolService : public IToolService {
 
 class ProcessingService : public IProcessingService {
  public:
+  explicit ProcessingService(std::shared_ptr<IToolService> tools = nullptr) : tools_(std::move(tools)) {}
   bool datalistText(const std::vector<DatalistEntry> &entries, const std::string &datalistDirectory, bool processed,
                     std::string &text, std::string &error) const override;
   std::string processedDatalistText(const std::string &datalistName) const override;
@@ -106,6 +125,18 @@ class ProcessingService : public IProcessingService {
   CommandPlan mosaic(const std::string &datalist, const MosaicParameters &p) const override;
   CommandPlan exportGrid(const std::string &grid, const ExportParameters &p) const override;
   CommandPlan exportSoundings(const std::string &datalist, const ExportParameters &p) const override;
+  FigureDependencies figureDependencies() const override;
+  CommandPlan figure(const FigureParameters &p) const override;
+
+  // Ghostscript as psconvert looks for it (PATH, the program directories
+  // and, on Windows, the default installation folders); "" if not found.
+  static std::string findGhostscript(const std::vector<std::string> &extraDirectories);
+  // A length for a map scale bar: 1, 2 or 5 times a power of ten, about a
+  // fifth of the map width (km).
+  static double scaleBarKm(double widthKm);
+
+ private:
+  std::shared_ptr<IToolService> tools_;
 };
 
 // Background jobs on a small pool of worker threads (see JobService.h).
@@ -133,15 +164,21 @@ class JobService : public IJobService {
   void worker();
   void run(const std::shared_ptr<Job> &job);
   void publish(const std::string &topic, const std::shared_ptr<Job> &job) const;
+  // Scheduling (mutex_ held): the job that blocks the queued job at a
+  // position (0: none), the position of the first job that may start now
+  // (-1: none) and the queued jobs whose blocking job changed.
+  std::int64_t blockerLocked(std::size_t position) const;
+  int runnableLocked() const;
+  std::vector<std::shared_ptr<Job>> updateBlockedLocked();
   std::shared_ptr<IToolService> tools_;
   const EventBus *events_;
   mutable std::mutex mutex_;
   mutable std::condition_variable changed_;
   std::map<std::int64_t, std::shared_ptr<Job>> jobs_;
   std::deque<std::int64_t> queue_;
+  std::vector<std::shared_ptr<Job>> active_;  // running jobs
   std::vector<std::thread> workers_;
   int maxConcurrent_;
-  int running_ = 0;
   bool stopping_ = false;
   std::int64_t nextId_ = 1;
 };

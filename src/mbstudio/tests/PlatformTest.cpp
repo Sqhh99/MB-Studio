@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "mbstudio/platform/Geodesy.h"
 #include "mbstudio/platform/Paths.h"
 #include "mbstudio/platform/Process.h"
 
@@ -187,4 +188,58 @@ TEST(Process, MissingProgramIsReported) {
   const ProcessResult r = runProcess(spec, nullptr);
   EXPECT_FALSE(r.started && r.exitCode == 0);
   EXPECT_FALSE(r.error.empty());
+}
+
+// Transverse Mercator (UTM) against reference values: the WGS 84 meridian
+// arc is 3 320 113.398 m at 30° and 4 984 944.378 m at 45° (GeographicLib).
+TEST(Geodesy, UtmOnTheCentralMeridian) {
+  const MapProjection north = MapProjection::parse("UTM13N");
+  ASSERT_TRUE(north.valid());
+  EXPECT_FALSE(north.geographic());
+  double x = 0.0, y = 0.0;
+  ASSERT_TRUE(north.forward(-105.0, 45.0, x, y));
+  EXPECT_NEAR(500000.0, x, 0.01);
+  EXPECT_NEAR(0.9996 * 4984944.378, y, 0.5);
+  const MapProjection south = MapProjection::parse("UTM33S");
+  ASSERT_TRUE(south.forward(15.0, -30.0, x, y));
+  EXPECT_NEAR(500000.0, x, 0.01);
+  EXPECT_NEAR(10000000.0 - 0.9996 * 3320113.398, y, 0.5);
+  EXPECT_EQ("UTM zone 33 S", south.name());
+}
+
+TEST(Geodesy, RoundTripsWithinAZone) {
+  const MapProjection utm = MapProjection::parse("EPSG:32610");  // UTM 10 N
+  ASSERT_TRUE(utm.valid());
+  for (const double lon : {-125.9, -124.5, -123.0, -120.1})
+    for (const double lat : {0.5, 36.8, 40.84, 71.0}) {
+      double x = 0.0, y = 0.0, lon2 = 0.0, lat2 = 0.0;
+      ASSERT_TRUE(utm.forward(lon, lat, x, y));
+      ASSERT_TRUE(utm.inverse(x, y, lon2, lat2));
+      EXPECT_NEAR(lon, lon2, 2e-8) << lon << " " << lat;  // about 2 mm
+      EXPECT_NEAR(lat, lat2, 2e-8) << lon << " " << lat;
+    }
+  // a local transverse Mercator has its origin at the reference point
+  const MapProjection ltm = MapProjection::parse("LTM-122.5/36.8");
+  ASSERT_TRUE(ltm.valid());
+  double x = 1.0, y = 1.0;
+  ASSERT_TRUE(ltm.forward(-122.5, 36.8, x, y));
+  EXPECT_NEAR(0.0, x, 1e-6);
+  EXPECT_NEAR(0.0, y, 1e-6);
+}
+
+TEST(Geodesy, NamesAndDistances) {
+  EXPECT_TRUE(MapProjection::parse("").geographic());
+  EXPECT_TRUE(MapProjection::parse("EPSG:4326").geographic());
+  EXPECT_TRUE(MapProjection::parse("Geographic").geographic());
+  EXPECT_TRUE(MapProjection::parse("UTM10").valid());  // north by default
+  EXPECT_FALSE(MapProjection::parse("UTM99N").valid());
+  EXPECT_FALSE(MapProjection::parse("EPSG:3857").valid());
+  EXPECT_FALSE(MapProjection::parse("nonsense").valid());
+  EXPECT_EQ(10, MapProjection::utmZone(-124.5));
+  EXPECT_EQ(31, MapProjection::utmZone(0.5));
+  EXPECT_EQ(60, MapProjection::utmZone(179.9));
+  // one degree of latitude on the mean sphere
+  EXPECT_NEAR(111195.08, geodesicDistance(10.0, 0.0, 10.0, 1.0), 0.5);
+  double x = 0.0, y = 0.0;
+  EXPECT_FALSE(MapProjection::parse("UTM10N").forward(60.0, 40.0, x, y));  // far outside the zone
 }

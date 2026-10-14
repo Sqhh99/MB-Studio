@@ -75,6 +75,21 @@ bool isGeographic(const std::string &name, const std::string &units) {
          u.find("degree_east") != std::string::npos || u.find("longitude") != std::string::npos;
 }
 
+// "Projection: UTM10N" in the remark that mbgrid and mbmosaic write (GMT
+// stores the remark as the "description" attribute).
+std::string projectionOf(int ncid) {
+  for (const char *name : {"description", "remark", "title", "history"}) {
+    const std::string text = textAttribute(ncid, NC_GLOBAL, name);
+    const auto at = text.find("Projection: ");
+    if (at == std::string::npos)
+      continue;
+    const std::string rest = text.substr(at + 12);
+    const auto end = rest.find_first_of(" \t\r\n");
+    return end == std::string::npos ? rest : rest.substr(0, end);
+  }
+  return std::string();
+}
+
 void finishGrid(Grid &grid) {
   bool any = false;
   for (float v : grid.z) {
@@ -221,6 +236,11 @@ GridLoadResult GridService::load(const std::string &path) const {
   if (!result.grid.valid()) {
     result.error = "grid is empty";
     return result;
+  }
+  const std::string projection = projectionOf(file.id);
+  if (!projection.empty() && projection.rfind("Geographic", 0) != 0 && projection != "EPSG:4326") {
+    result.grid.projection = projection;
+    result.grid.geographic = false;
   }
   finishGrid(result.grid);
   result.ok = true;

@@ -531,3 +531,240 @@ CommandPlan ProcessingService::exportSoundings(const std::string &datalist, cons
 }
 
 }  // namespace mbstudio::mbsystem
+
+namespace mbstudio::mbsystem {
+
+namespace {
+
+bool isAscii(const std::string &text) {
+  for (const unsigned char c : text)
+    if (c >= 0x80)
+      return false;
+  return true;
+}
+
+}  // namespace
+
+std::string ProcessingService::findGhostscript(const std::vector<std::string> &extraDirectories) {
+#ifdef _WIN32
+  const std::vector<std::string> names = {"gswin64c.exe", "gswin32c.exe", "gs.exe"};
+#else
+  const std::vector<std::string> names = {"gs"};
+#endif
+  std::vector<std::string> dirs = extraDirectories;
+  for (const auto &d : platform::splitPathList(platform::getEnv("PATH")))
+    dirs.push_back(d);
+#ifdef _WIN32
+  // the Ghostscript installer does not change PATH: C:\Program Files\gs\gs10.03.1\bin
+  for (const std::string &base : {platform::getEnv("ProgramFiles"), platform::getEnv("ProgramW6432"),
+                                  platform::getEnv("ProgramFiles(x86)")}) {
+    if (base.empty())
+      continue;
+    const std::string gs = platform::joinPath(base, "gs");
+    std::vector<std::string> versions = platform::listDirectory(gs);
+    std::sort(versions.rbegin(), versions.rend());  // newest first
+    for (const auto &v : versions)
+      dirs.push_back(platform::joinPath(platform::joinPath(gs, v), "bin"));
+  }
+#endif
+  for (const auto &dir : dirs) {
+    if (dir.empty())
+      continue;
+    for (const auto &name : names) {
+      const std::string candidate = platform::joinPath(dir, name);
+      if (platform::fileExists(candidate) && !platform::isDirectory(candidate))
+        return candidate;
+    }
+  }
+  return std::string();
+}
+
+double ProcessingService::scaleBarKm(double widthKm) {
+  if (!(widthKm > 0.0))
+    return 1.0;
+  const double target = widthKm / 5.0;
+  const double power = std::pow(10.0, std::floor(std::log10(target)));
+  for (const double m : {5.0, 2.0, 1.0})
+    if (m * power <= target)
+      return m * power;
+  return power;
+}
+
+FigureDependencies ProcessingService::figureDependencies() const {
+  FigureDependencies d;
+  std::vector<std::string> extra;
+  ToolInfo gmt;
+  if (tools_ && tools_->tool("gmt", gmt) && gmt.available) {
+    d.gmt = true;
+    extra.push_back(platform::parentPath(gmt.path));
+  }
+  d.ghostscriptPath = findGhostscript(extra);
+  d.ghostscript = !d.ghostscriptPath.empty();
+  if (!d.gmt)
+    d.message = "GMT (gmt) is not installed with MB-Studio";
+  else if (!d.ghostscript)
+    d.message = "Ghostscript was not found: GMT needs it to write PNG and PDF figures (PostScript works without it). "
+                "Install Ghostscript from https://ghostscript.com and restart MB-Studio.";
+  return d;
+}
+
+CommandPlan ProcessingService::figure(const FigureParameters &p) const {
+  const std::string &kind = p.kind;
+  if (kind != "bathymetry" && kind != "overview" && kind != "quality" && kind != "perspective")
+    return failed("unknown figure template: " + kind);
+  if (p.outputRoot.empty())
+    return failed("an output name is required");
+  if (p.grid.empty() && kind != "overview")
+    return failed("choose a grid for the figure");
+  if (p.grid.empty() && p.tracks.empty())
+    return failed("the figure has neither a grid nor survey lines");
+  if (p.grid.empty() && !p.region.valid())
+    return failed("the extent of the survey lines is not known yet");
+  if (p.formats.empty())
+    return failed("choose at least one figure format");
+  if (!(p.widthCm >= 2.0 && p.widthCm <= 200.0))
+    return failed("the figure width must be between 2 and 200 cm");
+  if (p.dpi < 30 || p.dpi > 2400)
+    return failed("the resolution must be between 30 and 2400 dpi");
+  if (p.contourInterval < 0.0 || p.annotationInterval < 0.0)
+    return failed("contour intervals cannot be negative");
+  bool raster = false;
+  std::string formats;
+  for (const auto &f : p.formats) {
+    if (f != "png" && f != "pdf" && f != "ps")
+      return failed("unknown figure format: " + f);
+    raster = raster || f != "ps";
+    formats += (formats.empty() ? "" : ",") + f;
+  }
+
+  CommandPlan plan;
+  const char *titles[] = {"Bathymetric map", "Survey overview", "Grid quality map", "Perspective view"};
+  const int t = kind == "bathymetry" ? 0 : kind == "overview" ? 1 : kind == "quality" ? 2 : 3;
+  plan.title = std::string(titles[t]) + " (GMT)";
+  if (raster) {
+    const FigureDependencies d = figureDependencies();
+    if (tools_ && !d.gmt)
+      return failed(d.message);
+    if (!d.ghostscript && p.ghostscript.empty())
+      return failed("PNG and PDF figures need Ghostscript, which was not found. Choose PostScript, or install "
+                    "Ghostscript (https://ghostscript.com) and restart MB-Studio.");
+  }
+  if (!isAscii(p.title) || !isAscii(p.zLabel))
+    plan.warnings.push_back("GMT's standard fonts cannot show non-Latin characters; use a title in Latin letters.");
+
+  // every gmt call of the job joins this private session
+  std::vector<std::pair<std::string, std::string>> environment;
+  if (!p.session.empty())
+    environment.emplace_back("GMT_SESSION_NAME", p.session);
+  if (!p.temporaryDirectory.empty())
+    environment.emplace_back("GMT_TMPDIR", p.temporaryDirectory);
+  auto gmt = [&plan, &environment](const std::string &title, std::vector<std::string> args) {
+    JobStep s = step(title, "gmt", std::move(args));
+    s.environment = environment;
+    plan.steps.push_back(s);
+  };
+
+  // psconvert options (raster and PDF output only; PostScript needs no
+  // conversion): crop with a margin, the raster resolution and the
+  // Ghostscript found here (GMT's own search does not know every location)
+  std::vector<std::string> begin = {"begin", p.outputRoot, formats};
+  if (raster) {
+    std::string options = "A+m0.4c,E" + std::to_string(p.dpi);
+    if (!p.ghostscript.empty() && p.ghostscript.find(',') == std::string::npos)
+      options += ",G" + p.ghostscript;
+    begin.push_back(options);
+  }
+  gmt("Start the figure", begin);
+
+  const std::string width = num(p.widthCm) + "c";
+  const std::string projection = p.geographic ? "-JM" + width : "-JX" + width + "/0";
+  const std::string region = p.region.valid() ? "-R" + boundsText(p.region) : std::string();
+  const std::string palette = p.palette.empty() ? std::string("haxby") : p.palette;
+  std::string illumination;
+  if (p.illumination)
+    illumination = "-I+a" + num(p.lightAzimuth) + "+nt1";
+
+  if (!p.grid.empty()) {
+    std::vector<std::string> cpt = {"grd2cpt", p.grid, "-C" + palette, "-Z"};
+    if (p.reversePalette)
+      cpt.push_back("-I");
+    gmt("Colour table from the grid", cpt);
+  }
+
+  if (kind == "perspective") {
+    std::vector<std::string> args = {"grdview", p.grid, projection, "-JZ" + num(p.reliefHeightCm) + "c",
+                                     "-p" + num(p.viewAzimuth) + "/" + num(p.viewElevation), "-Qi" + std::to_string(std::min(p.dpi, 300))};
+    if (!region.empty())
+      args.push_back(region);
+    if (!illumination.empty())
+      args.push_back(illumination);
+    args.push_back("-Baf");
+    args.push_back("-Bzaf+l" + p.zLabel);
+    args.push_back(p.title.empty() ? "-BWSneZ" : "-BWSneZ+t" + p.title);
+    gmt("Perspective surface (grdview)", args);
+  } else if (!p.grid.empty()) {
+    std::vector<std::string> args = {"grdimage", p.grid, projection};
+    if (!region.empty())
+      args.push_back(region);
+    if (!illumination.empty() && kind != "quality")
+      args.push_back(illumination);
+    args.push_back("-Baf");
+    args.push_back(p.title.empty() ? "-BWSne" : "-BWSne+t" + p.title);
+    gmt("Grid image (grdimage)", args);
+  } else {
+    gmt("Map frame (basemap)", {"basemap", projection, region, "-Baf", p.title.empty() ? "-BWSne" : "-BWSne+t" + p.title});
+  }
+
+  if (p.contourInterval > 0.0 && !p.grid.empty() && kind != "perspective" && kind != "quality") {
+    std::vector<std::string> args = {"grdcontour", p.grid, "-C" + num(p.contourInterval), "-W0.25p,gray25"};
+    if (p.annotationInterval > 0.0)
+      args.push_back("-A" + num(p.annotationInterval) + "+f6p,Helvetica,gray15");
+    gmt("Contours (grdcontour)", args);
+  }
+  if (!p.tracks.empty() && kind != "perspective") {
+    // ".fnv": date and time, epoch seconds, longitude (column 7), latitude (8)
+    std::vector<std::string> args = {"plot"};
+    args.insert(args.end(), p.tracks.begin(), p.tracks.end());
+    args.push_back("-i7,8");
+    args.push_back(kind == "overview" && p.grid.empty() ? "-W0.8p,darkblue" : "-W0.5p,black");
+    gmt("Survey lines", args);
+  }
+  if (p.colorbar && !p.grid.empty()) {
+    std::vector<std::string> args = {"colorbar", "-DJBC+o0/1.1c+w" + num(p.widthCm * 0.6) + "c/0.3c+h",
+                                     "-Baf+l" + p.zLabel};
+    if (kind == "perspective")
+      args.push_back("-p");
+    gmt("Colour scale", args);
+  }
+  if (p.scaleBar && p.geographic && kind != "perspective") {
+    // about a fifth of the map width
+    double widthKm = 0.0;
+    const GeoBounds &extent = p.region.valid() ? p.region : p.gridBounds;
+    if (extent.valid())
+      widthKm = (extent.east - extent.west) * 111.32 *
+                std::max(0.05, std::cos(0.5 * (extent.south + extent.north) * kPi / 180.0));
+    const double length = scaleBarKm(widthKm > 0.0 ? widthKm : 10.0);
+    std::vector<std::string> args = {"basemap", "-LjBL+w" + num(length) + "k+o0.4c/0.4c+f+u", "-Fl+gwhite@25+p0.25p"};
+    gmt("Scale bar", args);
+    if (widthKm <= 0.0)
+      plan.warnings.push_back("The scale bar length is a default; set the extent for a matching scale.");
+  }
+  gmt("Write the figure", {"end"});
+
+  for (const auto &f : p.formats)
+    plan.outputs.push_back(p.outputRoot + "." + f);
+  if (!p.geographic && p.scaleBar)
+    plan.warnings.push_back("Projected maps show coordinates in metres; no scale bar is drawn.");
+  plan.parameters["template"] = kind;
+  plan.parameters["grid"] = p.grid;
+  plan.parameters["palette"] = palette;
+  plan.parameters["width_cm"] = p.widthCm;
+  plan.parameters["dpi"] = static_cast<std::int64_t>(p.dpi);
+  plan.parameters["contours"] = p.contourInterval;
+  plan.parameters["formats"] = formats;
+  plan.parameters["session"] = p.session;
+  plan.ok = true;
+  return plan;
+}
+
+}  // namespace mbstudio::mbsystem
