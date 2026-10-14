@@ -9,7 +9,8 @@
 
 add_library(mbstudio_project_core STATIC
   ProjectPlugin.cpp
-  ProjectService.cpp)
+  ProjectService.cpp
+  RequestJson.cpp)
 set_target_properties(mbstudio_project_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_features(mbstudio_project_core PUBLIC cxx_std_17)
 target_include_directories(mbstudio_project_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

@@ -39,7 +39,7 @@ target_compile_definitions(mbstudio_mbsystem_test PRIVATE
   MBSTUDIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   MBSTUDIO_TOOL_DIR="${CMAKE_BINARY_DIR}/src/utilities"
   MBSTUDIO_HELP_DIR="${MBSTUDIO_HELP_DIR}")
-add_dependencies(mbstudio_mbsystem_test mbinfo mbgrid mbformat mbdatalist mbcopy mblist)
+add_dependencies(mbstudio_mbsystem_test mbinfo mbgrid mbformat mbdatalist mbcopy mblist mbclean mbprocess)
 add_test(NAME mbstudio_mbsystem_test COMMAND mbstudio_mbsystem_test)
 mb_set_test_environment(mbstudio_mbsystem_test)
 
@@ -62,7 +62,7 @@ if(TARGET mbstudio_project_core)
   target_compile_definitions(mbstudio_project_test PRIVATE
     MBSTUDIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     MBSTUDIO_TOOL_DIR="${CMAKE_BINARY_DIR}/src/utilities")
-  add_dependencies(mbstudio_project_test mbinfo mbgrid mbdatalist mbcopy mblist)
+  add_dependencies(mbstudio_project_test mbinfo mbgrid mbdatalist mbcopy mblist mbclean mbprocess mbset)
   add_test(NAME mbstudio_project_test COMMAND mbstudio_project_test)
   mb_set_test_environment(mbstudio_project_test)
 endif()

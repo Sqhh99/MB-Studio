@@ -57,10 +57,16 @@ ValueMap summary(const ProjectService &service) {
   for (const auto &l : lines)
     inspected += l.inspected ? 1 : 0;
   data["inspected"] = inspected;
+  for (std::size_t i = 0; i < lines.size(); i++)
+    data["line." + std::to_string(i)] = lines[i].id + " " + lines[i].processingStatus() + " " + lines[i].path;
   for (std::size_t i = 0; i < assets.size(); i++)
-    data["asset." + std::to_string(i)] = assets[i].type + " " + assets[i].path;
+    data["asset." + std::to_string(i)] =
+        assets[i].type + " " + (assets[i].status.empty() ? std::string("-") : assets[i].status) + " " + assets[i].path;
   for (std::size_t i = 0; i < history.size(); i++)
     data["job." + std::to_string(i)] = history[i].state + " " + history[i].title;
+  const NextAction next = service.nextAction();
+  data["next"] = next.kind;
+  data["nextReason"] = next.reason;
   const GeoBounds b = service.bounds();
   if (b.valid()) {
     data["west"] = b.west;
@@ -98,7 +104,8 @@ bool ProjectPlugin::initialize(Kernel &kernel, std::string &error) {
     if (p.info.id == "mbsystem")
       mbsystemVersion = p.info.version;
   service_ = std::make_shared<ProjectService>(formats, swath, processing, jobs, &kernel.events(), mbsystemVersion,
-                                              MBSTUDIO_VERSION);
+                                              MBSTUDIO_VERSION, kernel.services().get<ISoundingService>(),
+                                              kernel.services().get<IGridService>());
   service_->attach();
   kernel.services().provide<IProjectService>(service_, owner);
   std::weak_ptr<ProjectService> weak = service_;
@@ -183,12 +190,75 @@ bool ProjectPlugin::initialize(Kernel &kernel, std::string &error) {
                  return CommandResult::success(data);
                });
 
+  commands.add({"project.retry", "Run a job again",
+                "Repeat a job of the project history as a new attempt (project=..., sequence=..., wait=true)", owner,
+                "project"},
+               [weak](const ValueMap &args) {
+                 auto service = weak.lock();
+                 std::string error;
+                 if (!service || !ensureOpen(*service, args, error))
+                   return CommandResult::failure(error);
+                 const std::int64_t id = service->retry(getInt(args, "sequence"), error);
+                 if (id == 0)
+                   return CommandResult::failure(error);
+                 if (getBool(args, "wait", true) && !service->waitForJobs(kCommandTimeoutMs))
+                   return CommandResult::failure("timed out waiting for the job");
+                 ValueMap data = summary(*service);
+                 data["sequence"] = service->sequenceOfJob(id);
+                 return CommandResult::success(data);
+               });
+  commands.add({"project.figure", "Map figure",
+                "Make a GMT figure of a project grid (project=..., asset=<grid id or empty>, template=bathymetry|"
+                "overview|quality|perspective, name=..., formats=png|pdf|ps, width=16, contours=0, title=...)",
+                owner, "project"},
+               [weak](const ValueMap &args) {
+                 auto service = weak.lock();
+                 std::string error;
+                 if (!service || !ensureOpen(*service, args, error))
+                   return CommandResult::failure(error);
+                 ProcessingRequest request;
+                 request.kind = "figure";
+                 request.name = getString(args, "name");
+                 request.asset = getString(args, "asset");
+                 request.figure.kind = getString(args, "template", "bathymetry");
+                 if (request.asset.empty() && request.figure.kind != "overview")
+                   for (const auto &a : service->assets())  // the newest grid
+                     if (a.type == "grid" && a.parent.empty())
+                       request.asset = a.id;
+                 const std::vector<std::string> formats = splitList(getString(args, "formats", "png|pdf"));
+                 if (!formats.empty())
+                   request.figure.formats = formats;
+                 request.figure.widthCm = getDouble(args, "width", request.figure.widthCm);
+                 request.figure.contourInterval = getDouble(args, "contours", 0.0);
+                 request.figure.title = getString(args, "title");
+                 const std::int64_t id = service->run(request, error);
+                 if (id == 0)
+                   return CommandResult::failure(error);
+                 if (getBool(args, "wait", true) && !service->waitForJobs(kCommandTimeoutMs))
+                   return CommandResult::failure("timed out waiting for the figure job");
+                 ValueMap data = summary(*service);
+                 for (const auto &r : service->history())
+                   if (r.jobId == id) {
+                     data["state"] = r.state;
+                     data["error"] = r.error;
+                     for (std::size_t i = 0; i < r.outputs.size(); i++)
+                       data["output." + std::to_string(i)] = r.outputs[i];
+                     if (r.state != "completed" && getBool(args, "wait", true))
+                       return CommandResult::failure("figure " + r.state + ": " + r.error);
+                   }
+                 return CommandResult::success(data);
+               });
+
   // Workbench contributions: the processing chain as menu actions. The
   // front end maps the "ui:" commands to its own panels.
   std::vector<ActionContribution> actions = {
       {"project.new", "New project…", "file", "ui:newProject", "Ctrl+N", "folderOpen", owner, 10},
       {"project.openFile", "Open project…", "file", "ui:openProject", "Ctrl+Shift+O", "folderOpen", owner, 11},
-      {"project.addData", "Add survey data…", "file", "ui:addData", "Ctrl+I", "add", owner, 20},
+      {"project.addData", "Add survey data…", "data", "ui:addData", "Ctrl+I", "add", owner, 10},
+      {"data.addFolder", "Add a folder of survey data…", "data", "ui:addFolder", "", "folder", owner, 11},
+      {"data.inspect", "Inspect the selected line", "data", "ui:inspectSelected", "", "waves", owner, 20},
+      {"data.selectAll", "Select all survey lines", "data", "ui:selectAllLines", "", "check", owner, 30},
+      {"data.remove", "Remove the selected lines", "data", "ui:removeSelectedLines", "", "close", owner, 40},
       {"process.preprocess", "Preprocess…", "process", "ui:panel:preprocess", "", "tune", owner, 10},
       {"process.clean", "Clean bathymetry…", "process", "ui:panel:clean", "", "sweep", owner, 20},
       {"process.corrections", "Corrections…", "process", "ui:panel:corrections", "", "tune", owner, 30},
@@ -196,6 +266,7 @@ bool ProjectPlugin::initialize(Kernel &kernel, std::string &error) {
       {"process.grid", "Grid bathymetry…", "process", "ui:panel:grid", "Ctrl+G", "terrain", owner, 50},
       {"process.mosaic", "Backscatter mosaic…", "process", "ui:panel:mosaic", "", "layers", owner, 60},
       {"process.export", "Export…", "process", "ui:panel:export", "Ctrl+E", "openInNew", owner, 70},
+      {"analysis.figure", "Map figure (GMT)…", "analysis", "ui:panel:figure", "Ctrl+Shift+F", "map", owner, 40},
   };
   if (!kernel.contributions().addAll({}, actions, {}, &error))
     return false;

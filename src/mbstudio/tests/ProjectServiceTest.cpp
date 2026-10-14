@@ -2,6 +2,8 @@
 // and Chinese characters, import of real swath data (datalists written by the
 // service, metadata read in a background job), gridding through the job
 // service, product registration, persistence and the project.* commands.
+#include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -10,7 +12,10 @@
 #include "MbSystemPlugin.h"
 #include "ProjectPlugin.h"
 #include "ProjectService.h"
+#include "mbstudio/api/JobService.h"
 #include "mbstudio/api/ProjectService.h"
+#include "mbstudio/api/SoundingService.h"
+#include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/Kernel.h"
 #include "mbstudio/platform/Paths.h"
 
@@ -20,6 +25,11 @@ namespace {
 
 std::string testData() {
   return platform::joinPath(MBSTUDIO_SOURCE_DIR, "test/utilities/testdata/mb21/TN136HS.309.snipped.mb21");
+}
+
+// The same two pings in MB-System's processing format (written by mbprocess).
+std::string testData71() {
+  return platform::joinPath(MBSTUDIO_SOURCE_DIR, "test/utilities/testdata/mb71/TN136HS.309.snipped.mb71");
 }
 
 std::string scratch(const std::string &name) {
@@ -45,6 +55,17 @@ bool copyFile(const std::string &from, const std::string &to) {
   return platform::readTextFile(from, data) && platform::writeTextFile(to, data);
 }
 
+bool contains(const std::vector<std::string> &list, const std::string &item) {
+  return std::find(list.begin(), list.end(), item) != list.end();
+}
+
+const JobRecord *recordOf(const std::vector<JobRecord> &history, std::int64_t sequence) {
+  for (const auto &r : history)
+    if (r.sequence == sequence)
+      return &r;
+  return nullptr;
+}
+
 class ProjectTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -60,6 +81,29 @@ class ProjectTest : public ::testing::Test {
   void TearDown() override {
     service.reset();
     kernel->stop();
+  }
+  // a project with the line of format 71 (or 21) in its "raw" folder
+  std::string makeProject(const std::string &name, const std::string &data) {
+    const std::string root = platform::joinPath(freshFolder(name), "survey");
+    std::string error;
+    EXPECT_TRUE(service->create(root, name, error)) << error;
+    const std::string raw = platform::joinPath(root, "raw");
+    platform::makeDirectories(raw);
+    EXPECT_TRUE(copyFile(data, platform::joinPath(raw, "line" + data.substr(data.rfind('.')))));
+    const ImportResult imported = service->addFiles({raw}, true);
+    EXPECT_EQ(1, imported.added);
+    EXPECT_TRUE(concrete()->waitForJobs(120000));
+    return root;
+  }
+  project::ProjectService *concrete() { return dynamic_cast<project::ProjectService *>(service.get()); }
+  ProcessingRequest gridRequest(const std::string &name) const {
+    ProcessingRequest r;
+    r.kind = "grid";
+    r.name = name;
+    r.grid.spacing = 20;
+    r.grid.dataType = 2;
+    r.grid.bounds = GeoBounds{-124.507, -124.496, 40.835, 40.842};
+    return r;
   }
   std::unique_ptr<Kernel> kernel;
   std::shared_ptr<IProjectService> service;
@@ -209,4 +253,242 @@ TEST_F(ProjectTest, CommandsForTheCommandLine) {
   EXPECT_EQ(1, getInt(r.data, "lines"));
   EXPECT_FALSE(kernel->commands().execute("project.info", {{"project", scratch("none")}}).ok);
   EXPECT_FALSE(kernel->contributions().actions().empty());
+}
+
+// Products never share a file, jobs that write a survey line run before the
+// jobs that read it (and never at the same time), and repeating a job is a
+// new attempt with its own record, folder and outputs.
+TEST_F(ProjectTest, ReservesOutputsSerialisesAndRetries) {
+  makeProject("correctness", testData71());
+  const std::string lineId = service->lines().at(0).id;
+  std::string error;
+  ProcessingRequest clean;
+  clean.kind = "clean";
+  const auto cleanJob = service->run(clean, error);
+  ASSERT_NE(0, cleanJob) << error;
+  const auto first = service->run(gridRequest("bathy"), error);
+  ASSERT_NE(0, first) << error;
+  const auto second = service->run(gridRequest("bathy"), error);
+  ASSERT_NE(0, second) << error;
+  auto jobs = kernel->services().get<IJobService>();
+  JobInfo c, g1, g2;
+  ASSERT_TRUE(jobs->job(first, g1));
+  ASSERT_TRUE(jobs->job(second, g2));
+  // reserved while the first job is queued: a different file
+  ASSERT_FALSE(g1.outputs.empty());
+  EXPECT_NE(g1.outputs.front(), g2.outputs.front());
+  EXPECT_NE(std::string::npos, g2.outputs.front().find("bathy-2.grd"));
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  ASSERT_TRUE(jobs->job(cleanJob, c));
+  ASSERT_TRUE(jobs->job(first, g1));
+  ASSERT_TRUE(jobs->job(second, g2));
+  EXPECT_EQ(JobState::Completed, c.state) << c.error;
+  EXPECT_EQ(JobState::Completed, g1.state) << g1.error;
+  EXPECT_EQ(JobState::Completed, g2.state) << g2.error;
+  EXPECT_TRUE(contains(c.writes, "line:" + lineId));
+  EXPECT_TRUE(contains(g1.reads, "line:" + lineId));
+  EXPECT_GE(g1.startedAt, c.finishedAt);  // gridding waited for the cleaning
+  int grids = 0;
+  for (const auto &a : service->assets())
+    grids += a.type == "grid" ? 1 : 0;
+  EXPECT_EQ(2, grids);
+  // cleaning set edits that are not processed yet
+  EXPECT_EQ(1, service->lines().at(0).editRevision);
+  EXPECT_EQ("processing-required", service->lines().at(0).processingStatus());
+
+  // the job service does not repeat project jobs on its own
+  EXPECT_EQ(0, jobs->retry(first));
+  const std::int64_t sequence = service->sequenceOfJob(first);
+  ASSERT_GT(sequence, 0);
+  ProcessingRequest recorded;
+  ASSERT_TRUE(service->request(sequence, recorded));
+  EXPECT_EQ("grid", recorded.kind);
+  EXPECT_DOUBLE_EQ(20.0, recorded.grid.spacing);
+  EXPECT_EQ(std::vector<std::string>{lineId}, recorded.lines);
+  const auto again = service->retry(sequence, error);
+  ASSERT_NE(0, again) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  auto history = service->history();
+  const JobRecord *original = recordOf(history, sequence);
+  const JobRecord *attempt = recordOf(history, service->sequenceOfJob(again));
+  ASSERT_NE(nullptr, original);
+  ASSERT_NE(nullptr, attempt);
+  EXPECT_EQ("completed", attempt->state) << attempt->error;
+  EXPECT_EQ(2, attempt->attempt);
+  EXPECT_EQ(sequence, attempt->retryOf);
+  EXPECT_NE(original->workingDirectory, attempt->workingDirectory);
+  ASSERT_FALSE(attempt->outputs.empty());
+  EXPECT_NE(original->outputs.front(), attempt->outputs.front());
+  EXPECT_EQ("completed", original->state);  // the first attempt keeps its record
+  const std::int64_t attemptSequence = attempt->sequence;
+  // the import can be repeated as well
+  EXPECT_NE(0, service->retry(history.front().sequence, error)) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+
+  // attempts and requests persist
+  const std::string file = service->file();
+  service->close();
+  ASSERT_TRUE(service->open(file, error)) << error;
+  const auto reopened = service->history();
+  const JobRecord *restored = recordOf(reopened, attemptSequence);
+  ASSERT_NE(nullptr, restored);
+  EXPECT_EQ(2, restored->attempt);
+  EXPECT_EQ(sequence, restored->retryOf);
+  EXPECT_TRUE(service->request(sequence, recorded));
+  EXPECT_EQ(1, service->lines().at(0).editRevision);
+}
+
+// The editing loop: sounding edits are saved to the edit save file, the line
+// needs processing, mbprocess applies the edits, products made before are
+// outdated and can be made again from their recipe.
+TEST_F(ProjectTest, EditsProcessingAndOutdatedProducts) {
+  makeProject("editing", testData71());
+  SurveyLine line = service->lines().at(0);
+  EXPECT_EQ("unprocessed", line.processingStatus());
+  auto versions = service->lineVersions(line.id);
+  ASSERT_EQ(1u, versions.size());
+  EXPECT_EQ("original", versions[0].version);
+  EXPECT_TRUE(versions[0].exists);
+
+  std::string error;
+  ASSERT_NE(0, service->run(gridRequest("before"), error)) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  std::string before;
+  for (const auto &a : service->assets())
+    if (a.type == "grid") {
+      before = a.id;
+      EXPECT_EQ("current", a.status);
+      EXPECT_EQ(1u, a.inputs.size());
+    }
+  ASSERT_FALSE(before.empty());
+
+  // flag the first good sounding of each ping
+  auto soundings = kernel->services().get<ISoundingService>();
+  ASSERT_TRUE(soundings);
+  const SoundingSet set = soundings->load(line.workPath(), line.workFormat(), 0);
+  ASSERT_TRUE(set.ok) << set.error;
+  std::vector<BeamEdit> edits;
+  for (const auto &ping : set.pings)
+    for (std::uint32_t k = 0; k < ping.beams; k++)
+      if (beamflag::isGood(set.flag[ping.first + k])) {
+        edits.push_back(BeamEdit{ping.time, ping.multiplicity, static_cast<int>(k), BeamAction::Flag});
+        break;
+      }
+  ASSERT_EQ(2u, edits.size());
+  const auto saveJob = service->saveEdits({{line.id, edits}}, error);
+  ASSERT_NE(0, saveJob) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  line = service->lines().at(0);
+  EXPECT_EQ(1, line.editRevision);
+  EXPECT_EQ("processing-required", line.processingStatus());
+  for (const auto &a : service->assets())
+    if (a.id == before)
+      EXPECT_EQ("pending", a.status);  // its line waits for processing
+  EXPECT_EQ("process", service->nextAction().kind);
+  EXPECT_EQ("edit", service->history().back().kind);
+  EXPECT_EQ("completed", service->history().back().state) << service->history().back().error;
+  EXPECT_EQ(0, service->retry(service->history().back().sequence, error));  // edits come from the editor
+
+  ProcessingRequest process;
+  process.kind = "process";
+  ASSERT_NE(0, service->run(process, error)) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(180000));
+  ASSERT_EQ("completed", service->history().back().state) << service->history().back().error;
+  line = service->lines().at(0);
+  EXPECT_EQ("processed", line.processingStatus());
+  versions = service->lineVersions(line.id);
+  ASSERT_EQ(2u, versions.size());
+  EXPECT_EQ("processed", versions[1].version);
+  ASSERT_TRUE(versions[1].exists);
+  // mbprocess applied the edits: the processed file has the flags
+  const SoundingSet processed = soundings->load(versions[1].path, versions[1].format, 0);
+  ASSERT_TRUE(processed.ok) << processed.error;
+  ASSERT_EQ(set.pings.size(), processed.pings.size());
+  for (std::size_t p = 0; p < edits.size(); p++) {
+    const auto &ping = processed.pings[p];
+    ASSERT_LT(static_cast<std::uint32_t>(edits[p].beam), ping.beams);
+    EXPECT_TRUE(beamflag::isFlagged(processed.flag[ping.first + edits[p].beam])) << "ping " << p;
+  }
+  // the grid made before is outdated now
+  for (const auto &a : service->assets())
+    if (a.id == before) {
+      EXPECT_EQ("outdated", a.status);
+      EXPECT_EQ(1, a.staleInputs);
+    }
+  EXPECT_EQ("regenerate", service->nextAction().kind);
+  ASSERT_NE(0, service->regenerate(before, error)) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  int current = 0;
+  for (const auto &a : service->assets())
+    if (a.type == "grid" && a.status == "current")
+      current++;
+  EXPECT_EQ(1, current);  // the new grid; the old one stays outdated
+
+  // revisions persist
+  const std::string file = service->file();
+  service->close();
+  ASSERT_TRUE(service->open(file, error)) << error;
+  line = service->lines().at(0);
+  EXPECT_EQ(1, line.editRevision);
+  EXPECT_EQ(1, line.processedEdit);
+  EXPECT_EQ("processed", line.processingStatus());
+}
+
+// GMT figures are products: isolated GMT sessions, recipes, attempts.
+TEST_F(ProjectTest, MapFiguresWithGmt) {
+  makeProject("figures", testData());
+  std::string error;
+  ASSERT_NE(0, service->run(gridRequest("bathy"), error)) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(120000));
+  std::string grid;
+  for (const auto &a : service->assets())
+    if (a.type == "grid" && a.parent.empty())
+      grid = a.id;
+  ASSERT_FALSE(grid.empty());
+  ProcessingRequest figure;
+  figure.kind = "figure";
+  figure.asset = grid;
+  figure.name = "map";
+  figure.figure.formats = {"ps"};
+  figure.figure.contourInterval = 10;
+  figure.figure.title = "Test";
+  const CommandPlan plan = service->plan(figure);
+  ASSERT_TRUE(plan.ok) << plan.error;
+  ASSERT_FALSE(plan.steps.empty());
+  for (const auto &step : plan.steps)
+    if (!step.tool.empty()) {
+      ASSERT_EQ(2u, step.environment.size());
+      EXPECT_EQ(0u, step.environment[0].second.find("mbstudio-job-"));
+    }
+  EXPECT_NE(std::string::npos, plan.outputs.front().find("map.ps"));
+
+  ToolInfo gmt;
+  auto tools = kernel->services().get<IToolService>();
+  if (!tools->tool("gmt", gmt) || !gmt.available)
+    GTEST_SKIP() << "GMT is not installed where the tests can find it";
+  // two figures at once: each in its own GMT session
+  const auto a = service->run(figure, error);
+  ASSERT_NE(0, a) << error;
+  figure.figure.kind = "overview";
+  figure.name = "overview";
+  const auto b = service->run(figure, error);
+  ASSERT_NE(0, b) << error;
+  ASSERT_TRUE(concrete()->waitForJobs(180000));
+  const auto history = service->history();
+  for (const auto job : {a, b}) {
+    const JobRecord *r = recordOf(history, service->sequenceOfJob(job));
+    ASSERT_NE(nullptr, r);
+    std::string log;
+    platform::readTextFile(r->logPath, log);
+    ASSERT_EQ("completed", r->state) << r->error << "\n" << log;
+    ASSERT_FALSE(r->outputs.empty());
+    EXPECT_TRUE(platform::fileExists(r->outputs.front()));
+  }
+  int figures = 0;
+  for (const auto &asset : service->assets())
+    if (asset.type == "figure") {
+      figures++;
+      EXPECT_EQ("current", asset.status);
+    }
+  EXPECT_EQ(2, figures);
 }

@@ -40,7 +40,8 @@ class HostTest(unittest.TestCase):
   def testServicesAndCommandsAreRegistered(self):
     code, out, _ = run('--headless', '--list-services', '--list-commands')
     self.assertEqual(0, code)
-    for name in ('mbsystem.swath', 'mbsystem.tools', 'swath.inspect', 'tools.run'):
+    for name in ('mbsystem.swath', 'mbsystem.tools', 'mbsystem.soundings', 'swath.inspect', 'tools.run',
+                 'soundings.info', 'figure.check'):
       self.assertIn(name, out)
     self.assertNotIn('mbstudio.frontend', out)  # the UI plugin is not started headless
 
@@ -107,7 +108,25 @@ class HostTest(unittest.TestCase):
       self.assertTrue(os.path.exists(os.path.join(project, 'products', 'grids', 'bathy.grd')))
       code, out, err = run('--command', 'project.info', 'project=' + project)
       self.assertEqual(0, code, out + err)
-      self.assertEqual(2, json.loads(out)['jobs'])
+      result = json.loads(out)
+      self.assertEqual(2, result['jobs'])
+      self.assertEqual('', result['next'])  # nothing to do: the grid is current
+      self.assertIn('current', result['asset.0'])
+      # a job runs again as a new attempt with its own record
+      code, out, err = run('--command', 'project.retry', 'project=' + project, 'sequence=2')
+      self.assertEqual(0, code, out + err)
+      result = json.loads(out)
+      self.assertEqual(3, result['sequence'])
+      self.assertEqual(3, result['jobs'])
+      self.assertTrue(os.path.exists(os.path.join(project, 'products', 'grids', 'bathy-2.grd')))
+      # a GMT figure (PostScript needs no Ghostscript)
+      code, out, _ = run('--command', 'figure.check')
+      if code == 0 and json.loads(out)['gmt']:
+        code, out, err = run('--command', 'project.figure', 'project=' + project, 'name=map', 'formats=ps',
+                             'contours=10', 'title=Survey')
+        self.assertEqual(0, code, out + err)
+        self.assertEqual('completed', json.loads(out)['state'], out)
+        self.assertTrue(os.path.exists(os.path.join(project, 'products', 'figures', 'map.ps')))
     finally:
       shutil.rmtree(root, ignore_errors=True)
 
