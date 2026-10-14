@@ -39,7 +39,7 @@ Item {
             required property string argument
             required property int group
             required property bool shown
-            parent: group === 1 ? right.host : left.host
+            parent: (group === 1 ? right.host : left.host) || null
             anchors.fill: parent
             source: url
             visible: shown

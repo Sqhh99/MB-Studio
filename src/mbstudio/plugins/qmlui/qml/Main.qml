@@ -34,6 +34,8 @@ ApplicationWindow {
     visible: false
     title: (App.project.isOpen ? App.project.name + " — " : "") + "MB-Studio " + App.version
     color: Theme.background
+    // desktop labels: no upper case buttons of the Material style
+    font.capitalization: Font.MixedCase
 
     Material.theme: App.darkTheme ? Material.Dark : Material.Light
     Material.accent: Theme.accent

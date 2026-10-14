@@ -107,7 +107,7 @@ Rectangle {
         anchors.rightMargin: 6
         spacing: 2
         visible: root.workspace === "editor" && root.doc !== null
-        readonly property var ed: root.workspace === "editor" ? root.doc : null
+        readonly property var ed: root.workspace === "editor" && root.doc !== null && root.doc.selectionMode !== undefined ? root.doc : null
         BarLabel { text: qsTr("Tool") }
         ToolToggle { iconPath: Icons.rotate; tip: qsTr("Navigate: orbit, pan, zoom; a click shows the ping"); active: parent.ed !== null && parent.ed.tool === 0; onClicked: parent.ed.tool = 0 }
         ToolToggle { objectName: "toolRectangle"; iconPath: Icons.select; tip: qsTr("Select with a rectangle"); active: parent.ed !== null && parent.ed.tool === 1; onClicked: parent.ed.tool = 1 }
@@ -179,7 +179,7 @@ Rectangle {
         anchors.rightMargin: 6
         spacing: 2
         visible: root.workspace === "terrain" && root.doc !== null
-        readonly property var t: root.workspace === "terrain" ? root.doc : null
+        readonly property var t: root.workspace === "terrain" && root.doc !== null && root.doc.markerCount !== undefined ? root.doc : null
         BarLabel { text: qsTr("Tool") }
         ToolToggle { iconPath: Icons.rotate; tip: qsTr("Navigate: orbit (left), pan (right), zoom (wheel)"); active: parent.t !== null && parent.t.tool === 0; onClicked: parent.t.tool = 0 }
         ToolToggle { iconPath: Icons.ruler; tip: qsTr("Measure the distance between two points"); active: parent.t !== null && parent.t.tool === 1; onClicked: parent.t.tool = 1 }

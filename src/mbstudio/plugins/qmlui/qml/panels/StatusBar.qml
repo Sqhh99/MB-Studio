@@ -18,14 +18,14 @@ Rectangle {
     Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.border }
 
     function toolName() {
-        if (workspace === "editor" && doc !== null)
+        if (workspace === "editor" && doc !== null && doc.selectedCount !== undefined)
             return [qsTr("Navigate"), qsTr("Rectangle selection"), qsTr("Lasso selection"), qsTr("Brush selection"), qsTr("Point selection")][doc.tool]
-        if (workspace === "terrain" && doc !== null)
+        if (workspace === "terrain" && doc !== null && doc.markerCount !== undefined)
             return [qsTr("Navigate"), qsTr("Measure"), qsTr("Profile")][doc.tool]
         return ""
     }
     function selectionText() {
-        if (workspace === "editor" && doc !== null)
+        if (workspace === "editor" && doc !== null && doc.selectedCount !== undefined)
             return qsTr("%1 of %2 soundings selected").arg(doc.selectedCount).arg(doc.soundingCount)
         return App.project.isOpen ? App.project.selectionText : ""
     }
@@ -33,11 +33,11 @@ Rectangle {
         if (doc === null)
             return ""
         if (workspace === "inspect")
-            return doc.version !== "" ? qsTr("Version: %1").arg(doc.version) : doc.fileName
+            return doc.version !== undefined && doc.version !== "" ? qsTr("Version: %1").arg(doc.version) : (doc.fileName || "")
         if (workspace === "editor")
             return qsTr("Working files with saved edits")
         if (workspace === "grid" || workspace === "terrain")
-            return (doc.info.projectionName || doc.info.projection || "") !== "" ? (doc.info.projectionName || doc.info.projection) : ""
+            return doc.info !== undefined ? (doc.info.projectionName || doc.info.projection || "") : ""
         return ""
     }
     readonly property string cursorText: doc !== null && doc.statusText !== undefined && doc.statusText !== "" ? doc.statusText : App.cursorText
