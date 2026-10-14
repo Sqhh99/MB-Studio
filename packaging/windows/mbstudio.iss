@@ -5,11 +5,11 @@
 ; (see cmake/MBWindowsDeploy.cmake) into a single setup program.
 ;
 ; Build with:
-;   iscc /DAppVersion=0.2.0 /DStageDir=C:\path\to\stage /DSourceDir=C:\path\to\MB-Studio
+;   iscc /DAppVersion=0.3.0 /DStageDir=C:\path\to\stage /DSourceDir=C:\path\to\MB-Studio
 ;        /DOutputDir=C:\path\to\dist packaging\windows\mbstudio.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.3.0"
 #endif
 #ifndef StageDir
   #define StageDir "..\..\stage"

@@ -190,6 +190,21 @@ jobs:
           $json = $out | ConvertFrom-Json
           if (-not $json.ok -or $json.state -ne "completed") { throw "project.grid failed" }
           if (-not (Test-Path "$proj\products\grids\bathy.grd")) { throw "the project grid was not written" }
+          # A GMT figure of the grid in its own GMT session (PostScript needs no Ghostscript)
+          & "$bin\mbstudio.exe" --command figure.check | Write-Host
+          $out = & "$bin\mbstudio.exe" --command project.figure "project=$proj" name=map formats=ps contours=10 title=Smoke | Out-String
+          Write-Host $out
+          $json = $out | ConvertFrom-Json
+          if (-not $json.ok -or $json.state -ne "completed") {
+            Get-ChildItem "$proj\jobs" -Recurse -Filter job.log | Select-Object -Last 1 | Get-Content | Write-Host
+            throw "project.figure failed"
+          }
+          if (-not (Test-Path "$proj\products\figures\map.ps")) { throw "the GMT figure was not written" }
+          # a job of the history runs again as a new attempt
+          $out = & "$bin\mbstudio.exe" --command project.retry "project=$proj" sequence=2 | Out-String
+          Write-Host $out
+          $json = $out | ConvertFrom-Json
+          if (-not $json.ok) { throw "project.retry failed" }
           # Help pages: Markdown for the application, HTML for the browser
           $help = & "$bin\mbstudio.exe" --help-program mbgrid --lang en | Out-String
           if ($help -notmatch '## Synopsis') { throw "mbstudio --help-program failed: $help" }
@@ -270,7 +285,7 @@ jobs:
             qt6-base-dev qt6-declarative-dev qml6-module-qtquick qml6-module-qtquick-controls \
             qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates \
             qml6-module-qtquick-dialogs qml6-module-qtquick-shapes qml6-module-qtqml-workerscript \
-            qml6-module-qtcore
+            qml6-module-qtcore ghostscript
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DbuildGUIs=OFF -DbuildOpenCV=OFF -DbuildTRN=OFF

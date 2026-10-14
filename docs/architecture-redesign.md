@@ -5,7 +5,9 @@
 > **Planning baseline:** v0.1.0, plus the completed Windows native port and EM122 data-processing validation  
 > **Stack:** C++20, Qt 6 / QML, CMake, MB-System, plugin microkernel  
 > **Document date:** 2026-10-13  
-> **Status:** implemented in large part by MB-Studio 0.2.0; see *Implementation status*.  
+> **Status:** implemented in large part by MB-Studio 0.2.0; see *Implementation status*. MB-Studio 0.3.0 continues with
+> the review in [project-review-and-workbench-roadmap.md](project-review-and-workbench-roadmap.md) (its section 10
+> records what 0.3.0 implements).  
 > **Nature:** Design proposal. Unless explicitly noted, new interfaces, directories, and features in this document are **planning targets**. They do not mean the repository already implements them.
 
 ## Implementation status (MB-Studio 0.2.0)

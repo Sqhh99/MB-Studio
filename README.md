@@ -15,7 +15,11 @@ ported, and MB-Studio adds a graphical front end built on top of them.
   corrections, process, grid, mosaic and export are panels with typed parameters that show the exact
   commands, run as background jobs and add their products to the project. A map shows the survey tracks
   and grid layers; the grid view shows coverage, data counts, standard deviation and interpolated cells.
-  Every job is recorded with its commands and log. See [docs/workflow.md](docs/workflow.md).
+  Every job is recorded with its commands and log, can be repeated as a new attempt, and the project shows
+  which lines need processing and which products are outdated. See [docs/workflow.md](docs/workflow.md).
+- **3D, editing and maps** — view grids as 3D terrain (orbit, standard views, measurement, profiles), edit
+  soundings in 3D with a linked ping view (selection tools, flag/unflag, undo; edits go to MB-System edit save
+  files for `mbprocess`), and compose bathymetric maps, overviews and perspective views with GMT.
 - **Desktop application** — inspect swath files (statistics, navigation, depth profile), view bathymetry grids
   as colour shaded relief with interactive lighting, run every MB-System program with live output, and browse
   the supported data formats. Dark and light themes, drag and drop, Unicode paths, English, Japanese and
@@ -32,7 +36,7 @@ ported, and MB-Studio adds a graphical front end built on top of them.
 | Processing a survey | [docs/workflow.md](docs/workflow.md) |
 | Changes | [docs/CHANGES-MB-Studio.md](docs/CHANGES-MB-Studio.md) |
 
-Current version: **0.2.0** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
+Current version: **0.3.0** (see [VERSION](VERSION)), based on MB-System 5.8.3beta25.
 
 MB-Studio is distributed under the same terms as MB-System (GNU GPL version 3 or later, see *COPYING.md* and
 *GPL.md*). MB-System is Copyright © 1993-2025 by David W. Caress, Dale N. Chayes, Christian dos Santos Ferreira

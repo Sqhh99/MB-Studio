@@ -42,9 +42,11 @@ graphical user interface, is a plugin.
 - **Events** (`log.*`, `job.*`, `plugin.*`) are published synchronously; the
   user interface marshals them to its own thread.
 - **Platform layer** (`include/mbstudio/platform`): UTF-8 paths (UTF-16 at
-  the Win32 boundary), `LoadLibraryExW`/`dlopen`, and a process runner
+  the Win32 boundary), `LoadLibraryExW`/`dlopen`, a process runner
   (`CreateProcessW`/`fork`) with correct Windows argument quoting, live
-  output and cancellation.
+  output, environment overrides and cancellation, and the transverse
+  Mercator projections (UTM, local TM) of MB-System's projected grids
+  (`Geodesy.h`).
 
 ## Plugins (`plugins/`)
 
@@ -55,28 +57,43 @@ graphical user interface, is a plugin.
   `swath.inspect`, `grid.info`, `tools.list`, `tools.run`.
   It also provides the **job service** (`IJobService`: a queue of jobs made
   of program runs with structured argument lists and in-process steps, run on
-  worker threads with cancel, retry, a log per job and `job.*` events) and the
-  **processing service** (`IProcessingService`: typed recipes that map user
-  parameters explicitly to the options of `mbpreprocess`, `mbclean`,
-  `mbareaclean`, `mbset`, `mbprocess`, `mbgrid`, `mbmosaic` and the export
-  programs). Commands also include `grid.stats`, `processing.grid`,
-  `jobs.list`, `jobs.cancel`.
+  worker threads with cancel, retry, a log per job and `job.*` events; jobs
+  declare the resources they read and write and conflicting jobs are
+  serialised in submission order), the **processing service**
+  (`IProcessingService`: typed recipes that map user parameters explicitly to
+  the options of `mbpreprocess`, `mbclean`, `mbareaclean`, `mbset`,
+  `mbprocess`, `mbgrid`, `mbmosaic`, the export programs and GMT figures in
+  private GMT sessions) and the **sounding service** (`ISoundingService`: the
+  soundings of a swath file with the edits of its edit save file applied,
+  and saving edit events for `mbprocess`). Commands also include
+  `grid.stats`, `processing.grid`, `jobs.list`, `jobs.cancel`,
+  `soundings.info`, `figure.check`.
 - **project** (Qt Core for JSON only) provides `IProjectService`: the project
   file, survey lines with their metadata, products, layers, the open views
   and the processing history with provenance. It writes the datalists,
   turns processing requests on a selection of lines into jobs and registers
-  their products. Commands: `project.create`, `project.open`, `project.add`,
-  `project.grid`, `project.info`.
+  their products. Jobs declare the lines and files they use, outputs are
+  reserved while jobs are queued, retries are new attempts, and lines and
+  products carry revisions so that the project knows what needs processing
+  and which products are outdated. Commands: `project.create`,
+  `project.open`, `project.add`, `project.grid`, `project.figure`,
+  `project.retry`, `project.info`.
 - **qmlui** provides the `IFrontend` service. It is layered:
   - `viewmodels/` – C++ adapters between the kernel services and QML
     (`AppController`, `ProjectViewModel`, `ProcessingViewModel` with the
     declarative parameter schemas of the processing panels, `JobListModel`,
-    `WorkspaceModel`, `MapView`, `SwathViewModel`, `GridViewModel` + image
-    provider, `ToolsViewModel`, `FormatListModel`, `LogModel`, `TrackPlot`).
-    Long running work runs on worker threads.
-  - `qml/` – presentation only: the workbench shell (`Main.qml`), dock
-    panels (`panels/`), workspaces (`workspaces/`), pages, components, theme
-    and icons.
+    `WorkspaceModel` with one document object per tab and the split view,
+    `MapView`, the document models `GridViewModel` (+ image provider),
+    `TerrainViewModel`, `SwathViewModel` and `SoundingEditorModel` with
+    their views `TerrainView`, `PointCloudView` and `PingView` drawn by the
+    software renderer `SceneRenderer`, `WindowChrome` (the title bar drawn by
+    MB-Studio and native hit testing on Windows), `ToolsViewModel`,
+    `FormatListModel`, `LogModel`, `TrackPlot`). Long running work runs on
+    worker threads.
+  - `qml/` – presentation only: the workbench shell (`Main.qml`), the title
+    bar, tool options bar, document area and status bar, dock panels and the
+    context-sensitive property pages (`panels/`), workspaces
+    (`workspaces/`), pages, components, theme and icons.
 
 ## Command line
 
@@ -89,6 +106,8 @@ mbstudio --command tools.run tool=mbinfo args="-I datalist.mb-1"
 mbstudio --command project.create dir=D:\Surveys\EM122 name=EM122
 mbstudio --command project.add project=D:\Surveys\EM122 path=D:\Data\EM122
 mbstudio --command project.grid project=D:\Surveys\EM122 spacing=25
+mbstudio --command project.figure project=D:\Surveys\EM122 name=map formats=png|pdf
+mbstudio --command project.retry project=D:\Surveys\EM122 sequence=3
 ```
 
 ## Writing a plugin
@@ -121,8 +140,13 @@ Build it with `mbstudio_add_plugin(<target> hello hello.cpp)` (see
   programs (including an `mbgrid` run).
 - `mbstudio_project_test` – projects in folders with spaces and Chinese
   characters: import, metadata, gridding through the job service,
-  persistence and the project commands.
+  persistence and the project commands; output reservation and serialised
+  jobs, retries as new attempts, the editing loop (edit save file,
+  `mbprocess`, outdated products, regeneration) and GMT figures in parallel
+  sessions.
 - `mbstudio_host_test` – the `mbstudio` executable in its command line modes.
-- `mbstudio_qmlui_test` – view models with fake and real services, and an
+- `mbstudio_qmlui_test` – view models with fake and real services (documents
+  and split view, the software renderer, the 3D terrain view, the sounding
+  editor saving through the project, the window chrome hit test), and an
   offscreen smoke test of the complete QML interface that fails on any QML
   warning and saves screenshots of every workspace and panel.
