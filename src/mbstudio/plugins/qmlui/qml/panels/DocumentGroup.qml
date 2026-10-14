@@ -11,7 +11,8 @@ import "../components"
 Item {
     id: root
     property int group: 0
-    readonly property alias host: hostArea
+    // (a property, not an alias: it is null until the group is complete)
+    readonly property Item host: hostArea
     readonly property var workspaces: App.workspaces
     // the shown tab of this group
     readonly property int shownIndex: group === 0 ? workspaces.primaryIndex : workspaces.secondaryIndex

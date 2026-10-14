@@ -186,14 +186,14 @@ void figureFields(F &&f, P &p) {
 }
 
 template <typename Fields, typename P>
-QJsonObject write(Fields fields, const P &p) {
+QJsonObject writeFields(Fields fields, const P &p) {
   QJsonObject o;
   fields(Writer(o), p);
   return o;
 }
 
 template <typename Fields, typename P>
-void read(Fields fields, const QJsonObject &o, P &p) {
+void readFields(Fields fields, const QJsonObject &o, P &p) {
   fields(Reader(o), p);
 }
 
@@ -209,21 +209,21 @@ QJsonObject requestToJson(const ProcessingRequest &r) {
   const std::string &k = r.kind;
   auto writeAs = [&o](const char *key, const QJsonObject &value) { o[QLatin1String(key)] = value; };
   if (k == "preprocess")
-    writeAs("preprocess", write([](auto &&f, auto &p) { preprocessFields(f, p); }, r.preprocess));
+    writeAs("preprocess", writeFields([](auto &&f, auto &p) { preprocessFields(f, p); }, r.preprocess));
   else if (k == "clean")
-    writeAs("clean", write([](auto &&f, auto &p) { cleanFields(f, p); }, r.clean));
+    writeAs("clean", writeFields([](auto &&f, auto &p) { cleanFields(f, p); }, r.clean));
   else if (k == "corrections")
-    writeAs("corrections", write([](auto &&f, auto &p) { correctionFields(f, p); }, r.corrections));
+    writeAs("corrections", writeFields([](auto &&f, auto &p) { correctionFields(f, p); }, r.corrections));
   else if (k == "process")
-    writeAs("process", write([](auto &&f, auto &p) { processFields(f, p); }, r.process));
+    writeAs("process", writeFields([](auto &&f, auto &p) { processFields(f, p); }, r.process));
   else if (k == "grid")
-    writeAs("grid", write([](auto &&f, auto &p) { gridFields(f, p); }, r.grid));
+    writeAs("grid", writeFields([](auto &&f, auto &p) { gridFields(f, p); }, r.grid));
   else if (k == "mosaic")
-    writeAs("mosaic", write([](auto &&f, auto &p) { mosaicFields(f, p); }, r.mosaic));
+    writeAs("mosaic", writeFields([](auto &&f, auto &p) { mosaicFields(f, p); }, r.mosaic));
   else if (k == "export-grid" || k == "export-soundings")
-    writeAs("export", write([](auto &&f, auto &p) { exportFields(f, p); }, r.exporting));
+    writeAs("export", writeFields([](auto &&f, auto &p) { exportFields(f, p); }, r.exporting));
   else if (k == "figure")
-    writeAs("figure", write([](auto &&f, auto &p) { figureFields(f, p); }, r.figure));
+    writeAs("figure", writeFields([](auto &&f, auto &p) { figureFields(f, p); }, r.figure));
   return o;
 }
 
@@ -236,14 +236,14 @@ bool requestFromJson(const QJsonObject &o, ProcessingRequest &r) {
   in("asset", r.asset);
   in("name", r.name);
   auto part = [&o](const char *key) { return o.value(QLatin1String(key)).toObject(); };
-  read([](auto &&f, auto &p) { preprocessFields(f, p); }, part("preprocess"), r.preprocess);
-  read([](auto &&f, auto &p) { cleanFields(f, p); }, part("clean"), r.clean);
-  read([](auto &&f, auto &p) { correctionFields(f, p); }, part("corrections"), r.corrections);
-  read([](auto &&f, auto &p) { processFields(f, p); }, part("process"), r.process);
-  read([](auto &&f, auto &p) { gridFields(f, p); }, part("grid"), r.grid);
-  read([](auto &&f, auto &p) { mosaicFields(f, p); }, part("mosaic"), r.mosaic);
-  read([](auto &&f, auto &p) { exportFields(f, p); }, part("export"), r.exporting);
-  read([](auto &&f, auto &p) { figureFields(f, p); }, part("figure"), r.figure);
+  readFields([](auto &&f, auto &p) { preprocessFields(f, p); }, part("preprocess"), r.preprocess);
+  readFields([](auto &&f, auto &p) { cleanFields(f, p); }, part("clean"), r.clean);
+  readFields([](auto &&f, auto &p) { correctionFields(f, p); }, part("corrections"), r.corrections);
+  readFields([](auto &&f, auto &p) { processFields(f, p); }, part("process"), r.process);
+  readFields([](auto &&f, auto &p) { gridFields(f, p); }, part("grid"), r.grid);
+  readFields([](auto &&f, auto &p) { mosaicFields(f, p); }, part("mosaic"), r.mosaic);
+  readFields([](auto &&f, auto &p) { exportFields(f, p); }, part("export"), r.exporting);
+  readFields([](auto &&f, auto &p) { figureFields(f, p); }, part("figure"), r.figure);
   return !r.kind.empty();
 }
 

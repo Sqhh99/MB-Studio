@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <mutex>
 
 #include <netcdf.h>
 
@@ -213,6 +214,10 @@ bool loadLegacy(int ncid, GridLoadResult &result) {
 }  // namespace
 
 GridLoadResult GridService::load(const std::string &path) const {
+  // netCDF-C (and HDF5 under it) is not thread safe: grids are read by job
+  // threads and by the user interface at the same time
+  static std::mutex netcdf;
+  std::lock_guard<std::mutex> lock(netcdf);
   GridLoadResult result;
   NcFile file;
   // GMT grid file names may carry a format suffix ("grid.grd=nf").

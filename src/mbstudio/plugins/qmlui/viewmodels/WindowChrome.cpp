@@ -225,8 +225,9 @@ bool WindowChrome::onControl(QQuickItem *titleBar, const QPointF &scenePos) {
     QQuickItem *child = item->childAt(local.x(), local.y());
     if (child == nullptr)
       return false;
-    // buttons, menus and fields take the mouse; labels and backgrounds do not
-    if (child->isEnabled() && child->acceptedMouseButtons() != Qt::NoButton)
+    // buttons, menus and fields take the mouse; labels and backgrounds do
+    // not (Text accepts the left button only for links)
+    if (child->isEnabled() && child->acceptedMouseButtons() != Qt::NoButton && !child->inherits("QQuickText"))
       return true;
     if (child->property("chromeInteractive").toBool())
       return true;
