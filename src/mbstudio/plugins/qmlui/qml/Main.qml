@@ -311,10 +311,13 @@ ApplicationWindow {
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Discard | Dialog.Cancel
+        // a fixed content width: a wrapping label would otherwise size the
+        // dialog from its own width (binding loop)
+        contentWidth: 360
         Label {
             text: qsTr("The sounding editor has edits that are not saved. Close MB-Studio and discard them?")
             wrapMode: Text.WordWrap
-            width: 360
+            width: unsavedDialog.availableWidth
         }
         onDiscarded: {
             window.closeConfirmed = true

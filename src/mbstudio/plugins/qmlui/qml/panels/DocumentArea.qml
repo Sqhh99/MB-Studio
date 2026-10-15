@@ -16,13 +16,13 @@ Item {
         anchors.fill: parent
         orientation: Qt.Horizontal
         DocumentGroup {
-            id: left
+            id: leftGroup
             group: 0
             SplitView.fillWidth: true
             SplitView.minimumWidth: 220
         }
         DocumentGroup {
-            id: right
+            id: rightGroup
             group: 1
             visible: root.workspaces.split
             SplitView.preferredWidth: root.width / 2
@@ -41,8 +41,10 @@ Item {
             required property bool shown
             // Repeater keeps its delegates as siblings; only the contained
             // document moves between the visual hosts of the split groups.
+            // (The groups are not called "left" and "right": inside an Item
+            // those names are its anchor lines, not the ids.)
             Loader {
-                parent: (documentHost.group === 1 ? right.host : left.host) || null
+                parent: (documentHost.group === 1 ? rightGroup.host : leftGroup.host) || null
                 anchors.fill: parent
                 source: documentHost.url
                 visible: documentHost.shown

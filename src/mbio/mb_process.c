@@ -32,6 +32,7 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -4610,8 +4611,16 @@ int mb_pr_lockswathfile(int verbose, const char *file, int purpose, const char *
 	struct stat file_status;
 	const int fstat = stat(lockfile, &file_status);
 	if (fstat == -1) {
-		/* proceed only if we create the lockfile */
-		FILE *fp = fopen(lockfile, "wx");
+		/* proceed only if we create the lockfile (exclusive creation with
+		   open() rather than the C11 fopen mode "wx", which the Windows C
+		   run time does not support) */
+		FILE *fp = NULL;
+		const int fd = open(lockfile, O_WRONLY | O_CREAT | O_EXCL, 0644);
+		if (fd != -1) {
+			fp = fdopen(fd, "w");
+			if (fp == NULL)
+				close(fd);
+		}
 		if (fp != NULL) {
       char user[256], host[256], date[32];
       status = mb_user_host_date(verbose, user, host, date, error);
