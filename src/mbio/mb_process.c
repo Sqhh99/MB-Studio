@@ -165,6 +165,19 @@ static char *mb_pr_lastseparator(char *path) {
 	return last;
 }
 
+/* getcwd() with '/' separators: the paths built from it are shortened and
+   compared by '/' (on Windows getcwd() returns '\\'). */
+static char *mb_pr_getcwd(char *buffer, int size) {
+	char *result = getcwd(buffer, size);
+#ifdef _WIN32
+	if (result != NULL)
+		for (char *c = buffer; *c != '\0'; c++)
+			if (*c == '\\')
+				*c = '/';
+#endif
+	return result;
+}
+
 int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_struct *process, int *error) {
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -894,7 +907,7 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 	/* Now make input file global if local */
 	process->mbp_ifile_specified = true;
 	if (file[0] != '/' && file[1] != ':') {
-    char *getcwd_result = getcwd(process->mbp_ifile, MB_PATH_MAXLINE);
+    char *getcwd_result = mb_pr_getcwd(process->mbp_ifile, MB_PATH_MAXLINE);
     assert(strlen(process->mbp_ifile) > 0);
     assert(getcwd_result != NULL);
 		strcat(process->mbp_ifile, "/");
@@ -1475,7 +1488,7 @@ int mb_pr_writepar(int verbose, char *file, struct mb_process_struct *process, i
 		pwd[strlen(dirfile) - strlen(lastslash)] = '\0';
 	}
 	else {
-    char *getcwd_result = getcwd(pwd, MB_PATH_MAXLINE);
+    char *getcwd_result = mb_pr_getcwd(pwd, MB_PATH_MAXLINE);
     assert(strlen(pwd) > 0);
     assert(getcwd_result != NULL);
 		if (lastslash != NULL) {
