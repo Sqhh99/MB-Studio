@@ -452,13 +452,14 @@ TEST_F(ProjectTest, MapFiguresWithGmt) {
   figure.figure.formats = {"ps"};
   figure.figure.contourInterval = 10;
   figure.figure.title = "Test";
-  // GMT finishes every figure with psconvert, which needs Ghostscript
+  // figures need GMT, and Ghostscript for psconvert, which finishes every figure
   const CommandResult check = kernel->commands().execute("figure.check");
-  if (!getBool(check.data, "ghostscript")) {
+  const bool gmtFound = getBool(check.data, "gmt");
+  if (!gmtFound || !getBool(check.data, "ghostscript")) {
     const CommandPlan refused = service->plan(figure);
     EXPECT_FALSE(refused.ok);
-    EXPECT_NE(std::string::npos, refused.error.find("Ghostscript")) << refused.error;
-    GTEST_SKIP() << "Ghostscript is not installed";
+    EXPECT_NE(std::string::npos, refused.error.find(gmtFound ? "Ghostscript" : "GMT")) << refused.error;
+    GTEST_SKIP() << (gmtFound ? "Ghostscript is not installed" : "GMT is not installed where the tests can find it");
   }
   const CommandPlan plan = service->plan(figure);
   ASSERT_TRUE(plan.ok) << plan.error;
