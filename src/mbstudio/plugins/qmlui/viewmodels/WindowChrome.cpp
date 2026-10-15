@@ -124,30 +124,43 @@ void WindowChrome::setTitleBar(QQuickItem *item) {
 }
 
 void WindowChrome::install() {
+  // The system title bar is the default. The title bar drawn by MB-Studio is
+  // opt-in (MBSTUDIO_CUSTOM_TITLEBAR=1 or the "ui/customTitleBar" setting):
+  // on some Windows systems the frameless main window of 0.3.0 could not be
+  // created at all (CreateWindowEx failed, Qt kept retrying), so MB-Studio
+  // did not start and used a CPU core.
   const QSettings settings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("MB-Studio"),
                            QStringLiteral("mbstudio"));
-  const bool system = qEnvironmentVariableIntValue("MBSTUDIO_NATIVE_TITLEBAR") == 1 ||
-                      settings.value(QStringLiteral("ui/nativeTitleBar"), false).toBool();
-  active_ = !system;
+  const bool system = qEnvironmentVariableIntValue("MBSTUDIO_NATIVE_TITLEBAR") == 1;
+  const bool custom = qEnvironmentVariableIntValue("MBSTUDIO_CUSTOM_TITLEBAR") == 1 ||
+                      settings.value(QStringLiteral("ui/customTitleBar"), false).toBool();
+  active_ = custom && !system;
   if (active_) {
-    window_->setFlags(window_->flags() | Qt::Window | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint |
-                      Qt::WindowSystemMenuHint);
 #ifdef Q_OS_WIN
     if (QGuiApplication::platformName() == QLatin1String("windows")) {
+      // An ordinary window (no FramelessWindowHint, which made CreateWindowEx
+      // fail): it keeps its frame styles for Snap, the minimise and maximise
+      // animations and the system menu, and WM_NCCALCSIZE makes the whole
+      // window client area, which removes the system title bar.
       filter_ = std::make_unique<NativeFilter>(this);
       QCoreApplication::instance()->installNativeEventFilter(filter_.get());
-      // the frame styles give Snap, the minimise and maximise animations and
-      // the system menu; WM_NCCALCSIZE removes the system title bar
       const HWND hwnd = reinterpret_cast<HWND>(window_->winId());
-      LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-      style = (style & ~static_cast<LONG_PTR>(WS_POPUP)) | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX |
-              WS_MAXIMIZEBOX;
-      SetWindowLongPtrW(hwnd, GWL_STYLE, style);
-      SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                   SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
-      nativeFrame_ = true;
-    }
+      if (hwnd != nullptr) {
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+        nativeFrame_ = true;
+      } else {
+        // no native window: keep the system title bar
+        QCoreApplication::instance()->removeNativeEventFilter(filter_.get());
+        filter_.reset();
+        active_ = false;
+      }
+    } else
 #endif
+    {
+      window_->setFlags(window_->flags() | Qt::Window | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint |
+                        Qt::WindowSystemMenuHint);
+    }
   }
   emit activeChanged();
 }

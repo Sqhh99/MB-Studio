@@ -10,9 +10,10 @@
 // bar asks the window system to move or resize the window
 // (QWindow::startSystemMove / startSystemResize).
 //
-// Window geometry is saved per key and restored onto a screen that still
-// exists. MBSTUDIO_NATIVE_TITLEBAR=1 (or the "ui/nativeTitleBar" setting)
-// keeps the system title bar.
+// The system title bar is the default; the title bar drawn by MB-Studio is
+// opt-in with MBSTUDIO_CUSTOM_TITLEBAR=1 or the "ui/customTitleBar" setting
+// (MBSTUDIO_NATIVE_TITLEBAR=1 always keeps the system title bar). Window
+// geometry is saved per key and restored onto a screen that still exists.
 #pragma once
 
 #include <QObject>

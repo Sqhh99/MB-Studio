@@ -491,6 +491,37 @@ class QmlUiTest : public QObject {
     QCOMPARE(editor->editCount(), 0);
   }
 
+  // The system title bar is the default (the frameless window of 0.3.0
+  // could not be created on some Windows systems); MB-Studio's own title
+  // bar is opt-in.
+  void windowChromeDefaultsToTheSystemTitleBar() {
+    qunsetenv("MBSTUDIO_CUSTOM_TITLEBAR");
+    {
+      QQuickWindow window;
+      ui::WindowChrome chrome;
+      chrome.setWindow(&window);
+      QVERIFY(!chrome.active());
+      QVERIFY(!chrome.nativeFrame());
+      QVERIFY(!(window.flags() & Qt::FramelessWindowHint));
+    }
+    qputenv("MBSTUDIO_CUSTOM_TITLEBAR", "1");
+    {
+      QQuickWindow window;
+      ui::WindowChrome chrome;
+      chrome.setWindow(&window);
+      QVERIFY(chrome.active());
+    }
+    qputenv("MBSTUDIO_NATIVE_TITLEBAR", "1");  // always wins
+    {
+      QQuickWindow window;
+      ui::WindowChrome chrome;
+      chrome.setWindow(&window);
+      QVERIFY(!chrome.active());
+    }
+    qunsetenv("MBSTUDIO_NATIVE_TITLEBAR");
+    qunsetenv("MBSTUDIO_CUSTOM_TITLEBAR");
+  }
+
   void windowChromeHitTesting() {
     using C = ui::WindowChrome;
     const QSizeF size(1000, 700);
@@ -860,6 +891,8 @@ class QmlUiTest : public QObject {
   // Load the complete QML workbench offscreen against real services and a
   // real project, visit every workspace and panel, and fail on any warning.
   void qmlLoadsWithoutWarnings() {
+    // the title bar drawn by MB-Studio (opt-in) with its window buttons
+    qputenv("MBSTUDIO_CUSTOM_TITLEBAR", "1");
     KernelConfig config;
     config.toolDirectories = {MBSTUDIO_TOOL_DIR};
     config.version = MBSTUDIO_VERSION;
