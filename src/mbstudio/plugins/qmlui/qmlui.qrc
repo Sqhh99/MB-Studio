@@ -17,9 +17,12 @@
     <file>qml/components/ParamField.qml</file>
     <file>qml/components/PrimaryButton.qml</file>
     <file>qml/components/PropertyRow.qml</file>
+    <file>qml/components/ResizeHandles.qml</file>
     <file>qml/components/SectionTitle.qml</file>
     <file>qml/components/StatTile.qml</file>
+    <file>qml/components/TitleBar.qml</file>
     <file>qml/components/Toast.qml</file>
+    <file>qml/components/WindowButton.qml</file>
     <file>qml/components/WorkflowGuide.qml</file>
     <file>qml/pages/qmldir</file>
     <file>qml/pages/ConsolePanel.qml</file>
@@ -31,13 +34,24 @@
     <file>qml/panels/qmldir</file>
     <file>qml/panels/AboutDialog.qml</file>
     <file>qml/panels/CommandPalette.qml</file>
+    <file>qml/panels/DocumentArea.qml</file>
+    <file>qml/panels/DocumentGroup.qml</file>
+    <file>qml/panels/EditorProperties.qml</file>
+    <file>qml/panels/FigureProperties.qml</file>
+    <file>qml/panels/GridProperties.qml</file>
+    <file>qml/panels/InspectProperties.qml</file>
     <file>qml/panels/JobsPanel.qml</file>
     <file>qml/panels/LogDialog.qml</file>
     <file>qml/panels/NewProjectDialog.qml</file>
     <file>qml/panels/ProcessingPanel.qml</file>
     <file>qml/panels/ProjectPanel.qml</file>
     <file>qml/panels/PropertiesPanel.qml</file>
+    <file>qml/panels/StatusBar.qml</file>
+    <file>qml/panels/TerrainProperties.qml</file>
+    <file>qml/panels/ToolOptionsBar.qml</file>
     <file>qml/workspaces/qmldir</file>
+    <file>qml/workspaces/EditorWorkspace.qml</file>
+    <file>qml/workspaces/FigureWorkspace.qml</file>
     <file>qml/workspaces/FormatsWorkspace.qml</file>
     <file>qml/workspaces/GridWorkspace.qml</file>
     <file>qml/workspaces/HistoryWorkspace.qml</file>
@@ -46,6 +60,7 @@
     <file>qml/workspaces/PluginsWorkspace.qml</file>
     <file>qml/workspaces/ProgramsWorkspace.qml</file>
     <file>qml/workspaces/StartWorkspace.qml</file>
+    <file>qml/workspaces/TerrainWorkspace.qml</file>
     <file>i18n/ja.json</file>
     <file>i18n/zh_CN.json</file>
     <file alias="images/mbstudio.png">../../../../packaging/windows/mbstudio-256.png</file>

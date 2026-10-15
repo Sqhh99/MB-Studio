@@ -5,7 +5,7 @@ import ".."
 Rectangle {
     id: root
     default property alias content: inner.data
-    property int padding: 18
+    property int padding: 12
     color: Theme.surface
     radius: Theme.radius
     border.color: Theme.border

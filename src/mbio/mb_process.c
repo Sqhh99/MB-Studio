@@ -32,6 +32,7 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -153,6 +154,30 @@ int mb_pr_checkstatus(int verbose, char *file, int *prstatus, int *error) {
 	return (status);
 }
 /*--------------------------------------------------------------------*/
+/* The last directory separator of a path: '/', on Windows also '\\'. */
+static char *mb_pr_lastseparator(char *path) {
+	char *last = strrchr(path, '/');
+#ifdef _WIN32
+	char *backslash = strrchr(path, '\\');
+	if (backslash != NULL && (last == NULL || backslash > last))
+		last = backslash;
+#endif
+	return last;
+}
+
+/* getcwd() with '/' separators: the paths built from it are shortened and
+   compared by '/' (on Windows getcwd() returns '\\'). */
+static char *mb_pr_getcwd(char *buffer, int size) {
+	char *result = getcwd(buffer, size);
+#ifdef _WIN32
+	if (result != NULL)
+		for (char *c = buffer; *c != '\0'; c++)
+			if (*c == '\\')
+				*c = '/';
+#endif
+	return result;
+}
+
 int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_struct *process, int *error) {
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -882,7 +907,7 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 	/* Now make input file global if local */
 	process->mbp_ifile_specified = true;
 	if (file[0] != '/' && file[1] != ':') {
-    char *getcwd_result = getcwd(process->mbp_ifile, MB_PATH_MAXLINE);
+    char *getcwd_result = mb_pr_getcwd(process->mbp_ifile, MB_PATH_MAXLINE);
     assert(strlen(process->mbp_ifile) > 0);
     assert(getcwd_result != NULL);
 		strcat(process->mbp_ifile, "/");
@@ -900,7 +925,7 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 
 	/* Make output file global if local */
 	if (process->mbp_ofile[0] != '/' && process->mbp_ofile[1] != ':') {
-		char *lastslash = strrchr(process->mbp_ifile, '/');
+		char *lastslash = mb_pr_lastseparator(process->mbp_ifile);
 		if (lastslash != NULL) {
 			strcpy(dummy, process->mbp_ofile);
 			strcpy(process->mbp_ofile, process->mbp_ifile);
@@ -1049,8 +1074,9 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 	}
 
 	/* Now make filenames global if local */
-	char *lastslash = strrchr(process->mbp_ifile, '/');
-	const int len = lastslash - process->mbp_ifile + 1;
+	/* (without a directory separator there is no directory to prepend) */
+	char *lastslash = mb_pr_lastseparator(process->mbp_ifile);
+	const int len = lastslash != NULL ? (int)(lastslash - process->mbp_ifile) + 1 : 0;
 
 	/* reset navadj file */
 	if (len > 1 && strlen(process->mbp_navadjfile) > 1 && process->mbp_navadjfile[0] != '/' &&
@@ -1444,18 +1470,30 @@ int mb_pr_writepar(int verbose, char *file, struct mb_process_struct *process, i
   assert(process != NULL);
 
 	/* try to avoid absolute pathnames - get pwd */
-	char *lastslash = strrchr(file, '/');
-	if (file[0] == '/' && lastslash != NULL) {
-		strcpy(pwd, file);
-		pwd[strlen(file) - strlen(lastslash)] = '\0';
+#ifdef _WIN32
+	/* Windows paths: '\\' separators and absolute paths with a drive letter */
+	mb_path dirfile;
+	strcpy(dirfile, file);
+	for (char *c = dirfile; *c != '\0'; c++)
+		if (*c == '\\')
+			*c = '/';
+	const bool absolute = dirfile[0] == '/' || (dirfile[0] != '\0' && dirfile[1] == ':');
+#else
+	const char *dirfile = file;
+	const bool absolute = file[0] == '/';
+#endif
+	char *lastslash = strrchr(dirfile, '/');
+	if (absolute && lastslash != NULL) {
+		strcpy(pwd, dirfile);
+		pwd[strlen(dirfile) - strlen(lastslash)] = '\0';
 	}
 	else {
-    char *getcwd_result = getcwd(pwd, MB_PATH_MAXLINE);
+    char *getcwd_result = mb_pr_getcwd(pwd, MB_PATH_MAXLINE);
     assert(strlen(pwd) > 0);
     assert(getcwd_result != NULL);
 		if (lastslash != NULL) {
 			strcat(pwd, "/");
-			strcat(pwd, file);
+			strcat(pwd, dirfile);
 			lastslash = strrchr(pwd, '/');
 			pwd[strlen(pwd) - strlen(lastslash)] = '\0';
     }
@@ -4610,8 +4648,16 @@ int mb_pr_lockswathfile(int verbose, const char *file, int purpose, const char *
 	struct stat file_status;
 	const int fstat = stat(lockfile, &file_status);
 	if (fstat == -1) {
-		/* proceed only if we create the lockfile */
-		FILE *fp = fopen(lockfile, "wx");
+		/* proceed only if we create the lockfile (exclusive creation with
+		   open() rather than the C11 fopen mode "wx", which the Windows C
+		   run time does not support) */
+		FILE *fp = NULL;
+		const int fd = open(lockfile, O_WRONLY | O_CREAT | O_EXCL, 0644);
+		if (fd != -1) {
+			fp = fdopen(fd, "w");
+			if (fp == NULL)
+				close(fd);
+		}
 		if (fp != NULL) {
       char user[256], host[256], date[32];
       status = mb_user_host_date(verbose, user, host, date, error);

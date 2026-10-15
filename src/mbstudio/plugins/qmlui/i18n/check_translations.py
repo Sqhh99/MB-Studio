@@ -61,7 +61,7 @@ def collect(source):
     plugin = os.path.join(source, "..", "project", "ProjectPlugin.cpp")
     if os.path.exists(plugin):
         with open(plugin, encoding="utf-8") as f:
-            for m in re.finditer(r'\{"[\w.:-]+"\s*,\s*' + STRING + r'\s*,\s*"(?:file|process|tools|view|help)"',
+            for m in re.finditer(r'\{"[\w.:-]+"\s*,\s*' + STRING + r'\s*,\s*"(?:file|edit|view|data|process|analysis|window|tools|help)"',
                                  f.read()):
                 contributions.add(unescape(m.group(1)))
     return messages, contexts

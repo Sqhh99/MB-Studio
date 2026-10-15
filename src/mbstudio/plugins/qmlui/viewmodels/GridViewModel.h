@@ -1,11 +1,16 @@
-// MB-Studio QML UI - display of a gridded bathymetry (GMT grid) as colour
-// shaded relief. Loading and rendering run off the GUI thread; the rendered
-// image is served to QML through GridImageProvider ("image://mbgrid/...").
+// MB-Studio QML UI - a grid document: a gridded bathymetry (GMT grid) as
+// colour shaded relief with its quality layers. Loading and rendering run
+// off the GUI thread; the rendered image is served to QML through
+// GridImageProvider ("image://mbgrid/<document>/<revision>"), so every open
+// grid document has its own image. The display settings and the view
+// (zoom, pan) are the document's view state, saved with the project.
 #pragma once
 
 #include <QFutureWatcher>
+#include <QHash>
 #include <QImage>
 #include <QMutex>
+#include <QPointer>
 #include <QObject>
 #include <QQuickImageProvider>
 #include <QStringList>
@@ -14,6 +19,7 @@
 #include <memory>
 
 #include "mbstudio/api/GridService.h"
+#include "mbstudio/platform/Geodesy.h"
 
 namespace mbstudio::ui {
 
@@ -46,6 +52,14 @@ class GridViewModel : public QObject {
   Q_PROPERTY(bool autoRange READ autoRange WRITE setAutoRange NOTIFY optionsChanged)
   Q_PROPERTY(double rangeMin READ rangeMin WRITE setRangeMin NOTIFY optionsChanged)
   Q_PROPERTY(double rangeMax READ rangeMax WRITE setRangeMax NOTIFY optionsChanged)
+  // the view of the document (zoom factor and pan in pixels)
+  Q_PROPERTY(double viewZoom READ viewZoom WRITE setViewZoom NOTIFY viewChanged)
+  Q_PROPERTY(double viewPanX READ viewPanX WRITE setViewPanX NOTIFY viewChanged)
+  Q_PROPERTY(double viewPanY READ viewPanY WRITE setViewPanY NOTIFY viewChanged)
+  Q_PROPERTY(QString viewState READ viewState WRITE setViewState NOTIFY viewStateChanged)
+  // the value under the cursor (see probe())
+  Q_PROPERTY(QVariantMap lastProbe READ lastProbe NOTIFY probeChanged)
+  Q_PROPERTY(QString statusText READ statusText NOTIFY probeChanged)
 
  public:
   GridViewModel(std::shared_ptr<IGridService> grids, std::shared_ptr<IGridRenderService> renderer,
@@ -86,20 +100,36 @@ class GridViewModel : public QObject {
   void setRangeMin(double value);
   double rangeMax() const { return options_.zmax; }
   void setRangeMax(double value);
+  double viewZoom() const { return viewZoom_; }
+  void setViewZoom(double value);
+  double viewPanX() const { return viewPanX_; }
+  void setViewPanX(double value);
+  double viewPanY() const { return viewPanY_; }
+  void setViewPanY(double value);
+  QString viewState() const;
+  void setViewState(const QString &json);
+  QVariantMap lastProbe() const { return lastProbe_; }
+  QString statusText() const;
 
   Q_INVOKABLE void load(const QString &path);
   Q_INVOKABLE void reload() { load(path_); }
   Q_INVOKABLE void clear();
-  // Value under a point given in normalised image coordinates (0..1).
-  Q_INVOKABLE QVariantMap probe(double u, double v) const;
+  // Value under a point given in normalised image coordinates (0..1); it
+  // becomes lastProbe (an empty map for a point outside the grid).
+  Q_INVOKABLE QVariantMap probe(double u, double v);
+  Q_INVOKABLE void clearProbe();
   Q_INVOKABLE bool waitForFinished(int timeoutMs = 30000);
 
   QImage image() const;  // thread safe (used by the image provider)
+  int imageKey() const { return key_; }
 
  signals:
   void stateChanged();
   void optionsChanged();
   void imageChanged();
+  void viewChanged();
+  void viewStateChanged();
+  void probeChanged();
 
  private:
   struct Loaded {
@@ -133,15 +163,25 @@ class GridViewModel : public QObject {
   mutable QMutex imageMutex_;
   QImage image_;
   int revision_ = 0;
+  int key_ = 0;
+  double viewZoom_ = 1.0, viewPanX_ = 0.0, viewPanY_ = 0.0;
+  QVariantMap lastProbe_;
+  platform::MapProjection projection_;
+  QString pendingState_;
 };
 
+// Serves the rendered images of every grid document ("image://mbgrid/<key>/<revision>").
 class GridImageProvider : public QQuickImageProvider {
  public:
-  explicit GridImageProvider(GridViewModel *model);
+  GridImageProvider();
   QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override;
 
+  static void add(int key, GridViewModel *model);
+  static void remove(int key);
+
  private:
-  GridViewModel *model_;
+  static QMutex &mutex();
+  static QHash<int, QPointer<GridViewModel>> &models();
 };
 
 }  // namespace mbstudio::ui

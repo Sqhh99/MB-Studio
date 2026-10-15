@@ -16,6 +16,7 @@ add_library(mbstudio_mbsystem_core STATIC
   JobService.cpp
   MbSystemPlugin.cpp
   ProcessingService.cpp
+  SoundingService.cpp
   SwathService.cpp
   ToolService.cpp)
 set_target_properties(mbstudio_mbsystem_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

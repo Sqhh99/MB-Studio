@@ -6,3 +6,12 @@ LogDialog 1.0 LogDialog.qml
 NewProjectDialog 1.0 NewProjectDialog.qml
 CommandPalette 1.0 CommandPalette.qml
 AboutDialog 1.0 AboutDialog.qml
+DocumentGroup 1.0 DocumentGroup.qml
+DocumentArea 1.0 DocumentArea.qml
+ToolOptionsBar 1.0 ToolOptionsBar.qml
+StatusBar 1.0 StatusBar.qml
+GridProperties 1.0 GridProperties.qml
+TerrainProperties 1.0 TerrainProperties.qml
+EditorProperties 1.0 EditorProperties.qml
+InspectProperties 1.0 InspectProperties.qml
+FigureProperties 1.0 FigureProperties.qml

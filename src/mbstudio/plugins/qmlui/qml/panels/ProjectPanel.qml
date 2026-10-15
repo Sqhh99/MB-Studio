@@ -1,5 +1,6 @@
-// Left dock: the project's survey lines (multi-selection) and products
-// (map layers with visibility, quality grids below their grid).
+// Left dock: the project's survey lines (multi-selection, processing state)
+// and products (map layers with visibility, quality grids below their grid,
+// figures, exports; outdated products are marked).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -14,6 +15,15 @@ Rectangle {
     property string selectedProduct: ""
     signal productSelected(string id)
     signal addFolderRequested()
+    signal panelRequested(string kind)
+
+    function statusText(status) {
+        if (status === "processed") return qsTr("processed")
+        if (status === "edits-pending") return qsTr("edits pending")
+        if (status === "corrections-pending") return qsTr("corrections pending")
+        if (status === "processing-required") return qsTr("processing required")
+        return qsTr("unprocessed")
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -137,7 +147,7 @@ Rectangle {
             }
             delegate: Rectangle {
                 width: ListView.view.width
-                height: 44
+                height: 38
                 color: selected ? Theme.selection : lineMouse.containsMouse ? Theme.surfaceHover : "transparent"
                 MouseArea {
                     id: lineMouse
@@ -149,12 +159,13 @@ Rectangle {
                             if (!selected) root.project.select(lineId, 0)
                             lineMenu.lineId = lineId
                             lineMenu.linePath = path
+                            lineMenu.versionCount = model.versions
                             lineMenu.popup()
                             return
                         }
                         root.project.select(lineId, (mouse.modifiers & Qt.ControlModifier) ? 1 : (mouse.modifiers & Qt.ShiftModifier) ? 2 : 0)
                     }
-                    onDoubleClicked: App.inspectLine(lineId)
+                    onDoubleClicked: App.inspectLine(lineId, "")
                 }
                 RowLayout {
                     anchors.fill: parent
@@ -165,7 +176,7 @@ Rectangle {
                         Layout.preferredWidth: 8
                         Layout.preferredHeight: 8
                         radius: 4
-                        color: missing ? Theme.danger : model.state === "processed" ? Theme.success : model.state === "preprocessed" ? Theme.info : Theme.textFaint
+                        color: Theme.lineStatusColor(model.status, missing)
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -184,7 +195,7 @@ Rectangle {
                             font.pixelSize: Theme.fontSmall
                             text: missing ? qsTr("file not found")
                                   : !inspected ? qsTr("%1 · reading…").arg(formatName)
-                                  : qsTr("%1 · %2 pings · %3 km").arg(model.state === "processed" ? qsTr("processed") : model.state === "preprocessed" ? qsTr("preprocessed") : qsTr("raw"))
+                                  : qsTr("%1 · %2 pings · %3 km").arg(root.statusText(model.status))
                                         .arg(records).arg(Number(trackKm).toFixed(1))
                         }
                     }
@@ -246,10 +257,15 @@ Rectangle {
                             productMenu.assetId = assetId
                             productMenu.assetPath = path
                             productMenu.mappable = mappable
+                            productMenu.regenerable = model.regenerable === true
+                            productMenu.isFigure = type === "figure"
                             productMenu.popup()
                         }
                     }
-                    onDoubleClicked: if (mappable) App.openGrid(path)
+                    onDoubleClicked: {
+                        if (mappable) App.openGrid(path)
+                        else if (type === "figure") App.openFigure(assetId)
+                    }
                 }
                 RowLayout {
                     anchors.fill: parent
@@ -280,8 +296,27 @@ Rectangle {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
+                    // made from data that changed since, or waiting for processing
+                    Rectangle {
+                        visible: !quality && (model.status === "outdated" || model.status === "pending")
+                        Layout.preferredWidth: statusLabel.implicitWidth + 8
+                        Layout.preferredHeight: 15
+                        radius: Theme.radiusSmall
+                        color: Qt.rgba(Theme.productStatusColor(model.status).r, Theme.productStatusColor(model.status).g, Theme.productStatusColor(model.status).b, 0.2)
+                        Text {
+                            id: statusLabel
+                            anchors.centerIn: parent
+                            text: model.status === "outdated" ? qsTr("outdated") : qsTr("pending")
+                            color: Theme.productStatusColor(model.status)
+                            font.pixelSize: Theme.fontSmall - 1
+                        }
+                        ToolTip.visible: statusMouse.containsMouse
+                        ToolTip.text: model.status === "outdated" ? qsTr("Made from data of %1 survey line(s) that changed since; make it again").arg(model.staleInputs)
+                                                                  : qsTr("%1 of its survey lines have edits or corrections to process").arg(model.staleInputs)
+                        MouseArea { id: statusMouse; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                    }
                     Text {
-                        text: type === "grid" ? qsTr("grid") : type === "mosaic" ? qsTr("mosaic") : type === "export" ? qsTr("export")
+                        text: type === "grid" ? qsTr("grid") : type === "mosaic" ? qsTr("mosaic") : type === "export" ? qsTr("export") : type === "figure" ? qsTr("figure")
                               : type.indexOf("_num") > 0 ? qsTr("count") : type.indexOf("_sd") > 0 ? qsTr("std. dev.") : type
                         color: Theme.textFaint
                         font.pixelSize: Theme.fontSmall
@@ -295,10 +330,20 @@ Rectangle {
         id: lineMenu
         property string lineId
         property string linePath
-        MenuItem { text: qsTr("Inspect"); onTriggered: App.inspectLine(lineMenu.lineId) }
+        property int versionCount: 1
+        MenuItem { text: qsTr("Inspect"); onTriggered: App.inspectLine(lineMenu.lineId, "") }
+        MenuItem { text: qsTr("Inspect the original file"); onTriggered: App.inspectLine(lineMenu.lineId, "original") }
+        MenuItem {
+            text: qsTr("Inspect the processed file")
+            enabled: lineMenu.versionCount >= 3
+            onTriggered: App.inspectLine(lineMenu.lineId, "processed")
+        }
+        MenuItem { text: qsTr("Edit the soundings of the selected lines"); onTriggered: App.openEditor([]) }
+        MenuSeparator {}
         MenuItem { text: qsTr("Show in folder"); onTriggered: App.showInFolder(lineMenu.linePath) }
         MenuItem { text: qsTr("Statistics with mbinfo"); onTriggered: App.runToolOn("mbinfo", lineMenu.linePath) }
         MenuSeparator {}
+        MenuItem { text: qsTr("Process the selected lines…"); onTriggered: root.panelRequested("process") }
         MenuItem { text: qsTr("Grid the selected lines…"); onTriggered: App.trigger("ui:panel:grid") }
         MenuSeparator {}
         MenuItem { text: qsTr("Remove from the project"); onTriggered: root.project.removeSelectedLines() }
@@ -308,7 +353,25 @@ Rectangle {
         property string assetId
         property string assetPath
         property bool mappable: false
+        property bool regenerable: false
+        property bool isFigure: false
         MenuItem { text: qsTr("Open in the grid view"); enabled: productMenu.mappable; onTriggered: App.openGrid(productMenu.assetPath) }
+        MenuItem { text: qsTr("Open in 3D"); enabled: productMenu.mappable; onTriggered: App.openTerrain(productMenu.assetPath) }
+        MenuItem { text: qsTr("Open the figure"); enabled: productMenu.isFigure; onTriggered: App.openFigure(productMenu.assetId) }
+        MenuItem {
+            text: qsTr("Make again with the current data")
+            enabled: productMenu.regenerable
+            onTriggered: root.project.regenerateProduct(productMenu.assetId)
+        }
+        MenuItem {
+            text: qsTr("Map figure (GMT)…")
+            enabled: productMenu.mappable
+            onTriggered: {
+                App.processing.kind = "figure"
+                App.processing.setValue("source", productMenu.assetId)
+                root.panelRequested("figure")
+            }
+        }
         MenuItem { text: qsTr("Show in folder"); onTriggered: App.showInFolder(productMenu.assetPath) }
         MenuItem {
             text: qsTr("Export…")

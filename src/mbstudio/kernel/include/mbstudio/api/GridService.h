@@ -16,6 +16,10 @@ struct Grid {
   double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;  // node coordinates
   double zmin = 0.0, zmax = 0.0;
   bool geographic = false;
+  // Map projection of a projected grid as MB-System names it in the grid
+  // remark ("UTM10N", "EPSG:32610", "LTM-122.5/36.8"), empty for geographic
+  // grids or when the file does not say (see platform::MapProjection).
+  std::string projection;
   std::string title;
   std::string xName = "x", yName = "y", zName = "z", zUnits;
   // nx * ny values, row major; row 0 is the northernmost (ymax) row.

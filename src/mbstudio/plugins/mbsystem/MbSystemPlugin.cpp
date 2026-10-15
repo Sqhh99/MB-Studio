@@ -36,8 +36,9 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   auto render = std::make_shared<GridRenderService>();
   auto tools = std::make_shared<ToolService>(kernel.config().toolDirectories, &kernel.events());
   auto help = std::make_shared<HelpService>();
-  auto processing = std::make_shared<ProcessingService>();
+  auto processing = std::make_shared<ProcessingService>(tools);
   auto jobs = std::make_shared<JobService>(tools, &kernel.events());
+  auto soundings = std::make_shared<SoundingService>(formats);
 
   ServiceRegistry &services = kernel.services();
   services.provide<IFormatService>(formats, owner);
@@ -48,6 +49,7 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
   services.provide<IHelpService>(help, owner);
   services.provide<IProcessingService>(processing, owner);
   services.provide<IJobService>(jobs, owner);
+  services.provide<ISoundingService>(soundings, owner);
 
   CommandRegistry &commands = kernel.commands();
   commands.add({"formats.list", "List formats", "List the swath data formats supported by MB-System", owner},
@@ -106,6 +108,7 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
                                                 {"zmin", g.zmin},
                                                 {"zmax", g.zmax},
                                                 {"geographic", g.geographic},
+                                                {"projection", g.projection},
                                                 {"title", g.title}});
                });
   commands.add({"tools.list", "List programs", "MB-System programs and whether they are installed", owner},
@@ -168,6 +171,35 @@ bool MbSystemPlugin::initialize(Kernel &kernel, std::string &error) {
                  for (std::size_t i = 0; i < plan.outputs.size(); i++)
                    data["output." + std::to_string(i)] = plan.outputs[i];
                  return CommandResult::success(data);
+               });
+  commands.add({"soundings.info", "Soundings", "Soundings of a swath file with its saved edits applied (path=...)",
+                owner},
+               [soundings](const ValueMap &args) {
+                 const SoundingSet set = soundings->load(getString(args, "path"),
+                                                         static_cast<int>(getInt(args, "format", 0)), 0, nullptr);
+                 if (!set.ok)
+                   return CommandResult::failure(set.error);
+                 std::int64_t good = 0, flagged = 0, null = 0;
+                 for (const auto f : set.flag) {
+                   good += beamflag::isGood(f) ? 1 : 0;
+                   flagged += beamflag::isFlagged(f) ? 1 : 0;
+                   null += beamflag::isNull(f) ? 1 : 0;
+                 }
+                 return CommandResult::success({{"pings", static_cast<std::int64_t>(set.pings.size())},
+                                                {"soundings", static_cast<std::int64_t>(set.size())},
+                                                {"good", good},
+                                                {"flagged", flagged},
+                                                {"null", null},
+                                                {"esf", set.esfPath},
+                                                {"savedEdits", static_cast<std::int64_t>(set.savedEdits)}});
+               });
+  commands.add({"figure.check", "Figure dependencies", "Whether GMT and Ghostscript can write figures", owner},
+               [processing](const ValueMap &) {
+                 const FigureDependencies d = processing->figureDependencies();
+                 return CommandResult::success({{"gmt", d.gmt},
+                                                {"ghostscript", d.ghostscript},
+                                                {"ghostscriptPath", d.ghostscriptPath},
+                                                {"message", d.message}});
                });
   commands.add({"jobs.list", "Jobs", "Background jobs and their state", owner}, [jobs](const ValueMap &) {
     ValueMap data;

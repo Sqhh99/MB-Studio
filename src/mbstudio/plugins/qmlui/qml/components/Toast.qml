@@ -12,9 +12,9 @@ Rectangle {
         timer.restart()
     }
     width: Math.min(label.implicitWidth + 48, parent ? parent.width - 40 : 600)
-    height: 44
-    radius: 22
-    color: Theme.dark ? "#2A3B4D" : "#26323F"
+    height: 34
+    radius: Theme.radius
+    color: Theme.dark ? "#33363B" : "#2B2F35"
     opacity: 0
     visible: opacity > 0
     Behavior on opacity { NumberAnimation { duration: 180 } }

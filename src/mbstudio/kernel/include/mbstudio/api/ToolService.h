@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mbstudio/platform/Process.h"
@@ -29,6 +30,14 @@ class IToolService {
                                       const std::string &workingDirectory,
                                       const platform::OutputHandler &output,
                                       const std::atomic<bool> *cancel = nullptr) const = 0;
+  // The same with extra environment variables (overrides) for the program.
+  virtual platform::ProcessResult runWithEnvironment(
+      const std::string &name, const std::vector<std::string> &arguments, const std::string &workingDirectory,
+      const std::vector<std::pair<std::string, std::string>> &environment, const platform::OutputHandler &output,
+      const std::atomic<bool> *cancel = nullptr) const {
+    (void)environment;
+    return run(name, arguments, workingDirectory, output, cancel);
+  }
 };
 
 }  // namespace mbstudio

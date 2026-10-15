@@ -1,5 +1,6 @@
 // The processing history of the project: what ran, with which commands,
-// what it produced, and its log.
+// what it produced, and its log; a job runs again as a new attempt, or its
+// recorded settings are loaded into its processing panel to change them.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -23,7 +24,7 @@ Item {
         id: list
         anchors.fill: parent
         anchors.margins: Theme.pagePadding
-        spacing: 10
+        spacing: 6
         clip: true
         model: page.history
         ScrollBar.vertical: ScrollBar {}
@@ -38,6 +39,7 @@ Item {
                     spacing: 10
                     Text { text: "#" + sequence; color: Theme.textFaint; font.family: Theme.monoFont; font.pixelSize: Theme.fontSmall + 1 }
                     Text { text: title; color: Theme.text; font.pixelSize: Theme.fontBody + 1; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true }
+                    Chip { visible: attempt > 1; text: qsTr("attempt %1 (of #%2)").arg(attempt).arg(retryOf); tint: Theme.info }
                     Chip { text: model.state; tint: Theme.stateColor(model.state) }
                 }
                 Text {
@@ -65,6 +67,19 @@ Item {
                 }
                 RowLayout {
                     spacing: 6
+                    Button {
+                        objectName: "retryJob"
+                        text: qsTr("Run again")
+                        flat: true
+                        visible: canRetry
+                        onClicked: App.project.retryJob(sequence)
+                    }
+                    Button {
+                        text: qsTr("Change settings…")
+                        flat: true
+                        visible: canRetry && kind !== "import"
+                        onClicked: if (App.processing.loadRequest(sequence)) App.trigger("ui:panel:" + App.processing.kind)
+                    }
                     Button { text: qsTr("Open log file"); flat: true; enabled: logPath !== ""; onClicked: App.openPath(logPath) }
                     Button { text: qsTr("Show the job folder"); flat: true; enabled: logPath !== ""; onClicked: App.showInFolder(logPath) }
                 }

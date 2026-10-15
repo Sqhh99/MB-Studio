@@ -126,6 +126,11 @@ QVariant JobListModel::data(const QModelIndex &index, int role) const {
     case OutputsRole: return toList(j.outputs);
     case WorkingDirectoryRole: return QString::fromStdString(j.workingDirectory);
     case RetryOfRole: return static_cast<qint64>(j.retryOf);
+    case BlockedByRole: return static_cast<qint64>(j.blockedBy);
+    case OwnerRole: return QString::fromStdString(j.owner);
+    case CanRetryRole:
+      return isFinished(j.state) && j.state != JobState::Completed &&
+             (j.retryable || (j.owner == "project" && project_ && j.kind != "edit"));
     default: return {};
   }
 }
@@ -135,7 +140,8 @@ QHash<int, QByteArray> JobListModel::roleNames() const {
           {StateRole, "state"},      {StepRole, "step"},       {StepCountRole, "stepCount"},
           {StepTitleRole, "stepTitle"}, {LastLineRole, "lastLine"}, {ElapsedRole, "elapsed"},
           {ErrorRole, "error"},      {CommandsRole, "commands"}, {LogPathRole, "logPath"},
-          {OutputsRole, "outputs"},  {WorkingDirectoryRole, "workingDirectory"}, {RetryOfRole, "retryOf"}};
+          {OutputsRole, "outputs"},  {WorkingDirectoryRole, "workingDirectory"}, {RetryOfRole, "retryOf"},
+          {BlockedByRole, "blockedBy"}, {OwnerRole, "owner"},     {CanRetryRole, "canRetry"}};
 }
 
 int JobListModel::activeCount() const {
@@ -175,7 +181,19 @@ bool JobListModel::cancel(qint64 id) {
 qint64 JobListModel::retry(qint64 id) {
   if (!service_)
     return 0;
-  const qint64 newId = service_->retry(id);
+  JobInfo j;
+  qint64 newId = 0;
+  if (service_->job(id, j) && j.owner == "project" && project_) {
+    // a new attempt with its own history entry, job folder and outputs
+    std::string error;
+    const std::int64_t sequence = project_->sequenceOfJob(id);
+    newId = sequence > 0 ? project_->retry(sequence, error) : 0;
+    if (newId == 0)
+      emit notify(tr("Could not run the job again: %1")
+                      .arg(QString::fromStdString(error.empty() ? std::string("not a job of the open project") : error)));
+  } else {
+    newId = service_->retry(id);
+  }
   scheduleRefresh();
   return newId;
 }

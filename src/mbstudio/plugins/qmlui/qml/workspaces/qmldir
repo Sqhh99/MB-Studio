@@ -6,3 +6,6 @@ HistoryWorkspace 1.0 HistoryWorkspace.qml
 ProgramsWorkspace 1.0 ProgramsWorkspace.qml
 FormatsWorkspace 1.0 FormatsWorkspace.qml
 PluginsWorkspace 1.0 PluginsWorkspace.qml
+TerrainWorkspace 1.0 TerrainWorkspace.qml
+EditorWorkspace 1.0 EditorWorkspace.qml
+FigureWorkspace 1.0 FigureWorkspace.qml

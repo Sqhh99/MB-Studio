@@ -1,5 +1,8 @@
-// A grid: colour shaded relief with quality layers (see GridPage).
+// A grid document: colour shaded relief with quality layers (see GridPage).
 import QtQuick
 import "../pages"
 
-GridPage {}
+GridPage {
+    property var document: null
+    grid: document
+}

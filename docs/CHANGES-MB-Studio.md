@@ -3,6 +3,81 @@
 Changes of MB-Studio relative to upstream MB-System. The MB-System change log
 is in `ChangeLog.md`.
 
+## 0.3.0
+
+MB-Studio 0.3 follows the review in
+[project-review-and-workbench-roadmap.md](project-review-and-workbench-roadmap.md):
+results are correct and traceable first, then the workbench, 3D terrain
+viewing, sounding editing and GMT cartography.
+
+- **Jobs that cannot collide.** Every job declares the survey lines and files
+  it reads and writes. The job service never runs a job that writes what
+  another job reads or writes, and conflicting jobs keep the order in which
+  they were submitted; independent jobs still run in parallel. The Jobs panel
+  says which job a queued job waits for. Product names are reserved while a
+  job is queued or running, so two jobs never write the same grid.
+- **Retries are new attempts.** Running a project job again (Jobs panel,
+  history, `project.retry`) creates a new history entry (attempt 2, 3, ...)
+  with its own job folder and outputs and a link to the attempt it repeats.
+  Every job records its request, so it can also be repeated in a later
+  session, or loaded into its processing panel to change the settings.
+- **Data versions.** A survey line has an original, a preprocessed and a
+  processed file; the line inspector shows the version you choose and says
+  which one it shows.
+- **What needs updating.** Survey lines count their edit, correction and
+  source revisions and remember which ones their processed file contains;
+  products remember what they were made from. The project panel shows
+  *edits pending*, *processing required*, *outdated* and *pending*; the
+  properties panel and the tool bar show the recommended next step; an
+  outdated product is made again from its recorded recipe with one click.
+- **Projected grids on the map.** Grids in UTM or local transverse Mercator
+  coordinates (as written by `mbgrid -J`) are placed on the map; the job
+  message says whether the result is on the map or why not.
+- **3D terrain view.** A grid as a lit surface: orbit, pan, zoom, fit, top,
+  front and side views, perspective or orthographic projection, vertical
+  exaggeration, colour tables and legend, the value under the cursor (from
+  the grid, not from the picture), distance and slope between two points and
+  a profile. Cells without data are holes, interpolated cells are stippled.
+- **Sounding editor.** The soundings of selected survey lines in 3D with the
+  saved edits applied; rectangle, lasso, brush and point selection (replace,
+  add with Shift, remove with Ctrl), flag and unflag, undo and redo, colours
+  by depth, line, flag state or beam, and a linked ping view across the
+  track. Every sounding keeps its line, ping time, multiplicity and beam;
+  saving appends edit events to the line's edit save file (`.esf`) and sets
+  `EDITSAVEMODE`/`EDITSAVEFILE` for `mbprocess`, as MB-System's editors do.
+- **GMT figures.** A figure panel makes bathymetric maps with contours,
+  survey overviews, grid quality maps and perspective views with GMT (colour
+  scale, scale bar, title; PNG, PDF or PostScript). Each figure job runs in
+  its own GMT session and temporary folder, so figure jobs can run at the
+  same time. Missing Ghostscript (GMT needs it for every figure format) is reported before
+  the job starts. Figures are products with their recipe: they open in a
+  figure tab, can be made again, and their settings can be changed.
+- **Workbench.**
+  - An MB-Studio title bar with the menus, the project name, a mark for
+    unsaved edits and the window buttons. On Windows the window keeps the
+    native frame behaviour (Snap, double click, the system menu, resizing at
+    the edges); `MBSTUDIO_NATIVE_TITLEBAR=1` brings back the system title
+    bar. The window size and position are restored onto a screen that still
+    exists.
+  - Every grid, 3D view, survey line, editor and figure tab has its own
+    document, so several can be open at once; the document area splits into
+    two groups side by side to compare them. Open tabs, the split and each
+    document's view (colours, zoom, camera, version) are saved with the
+    project.
+  - The properties panel shows the settings of the active document, so the
+    grid view no longer has a sidebar of its own; a tool options bar shows the
+    tools of the active document; the status bar shows the active tool, the
+    selection, the cursor position and the data version.
+  - Menus File, Edit, View, Data, Process, Analysis, Window and Help;
+    workspace presets (Overview, Bathymetry editing, Modelling, Cartography,
+    Delivery) with a saved custom layout.
+  - Neutral grey themes with compact controls.
+- **Command line.** `project.retry`, `project.figure`, `soundings.info` and
+  `figure.check`; `project.info` lists the line and product states and the
+  next step.
+- Project files are version 2; projects of 0.2 are read and updated.
+- Plugin ABI version 3: plugins built for 0.2 must be rebuilt.
+
 ## 0.2.0
 
 MB-Studio becomes a project-centred workbench that integrates the MB-System

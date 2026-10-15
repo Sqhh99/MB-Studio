@@ -25,7 +25,7 @@ ColumnLayout {
         ]
         delegate: ItemDelegate {
             Layout.fillWidth: true
-            implicitHeight: 44
+            implicitHeight: 36
             onClicked: root.stepClicked(modelData.panel)
             contentItem: RowLayout {
                 spacing: 10

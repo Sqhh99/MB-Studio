@@ -49,7 +49,60 @@ struct LayerResult {
   QImage image;
   GeoBounds bounds;
   std::shared_ptr<const Grid> grid;
+  platform::MapProjection projection;
 };
+
+// A projected grid image on the geographic map: the geographic extent of
+// the grid outline, and every map pixel sampled from the projected image.
+bool warpToGeographic(const Grid &g, const QImage &projected, const platform::MapProjection &projection,
+                      QImage &out, GeoBounds &bounds) {
+  const double x0 = g.xmin - 0.5 * g.dx(), x1 = g.xmax + 0.5 * g.dx();
+  const double y0 = g.ymin - 0.5 * g.dy(), y1 = g.ymax + 0.5 * g.dy();
+  bool first = true;
+  constexpr int kEdge = 64;
+  for (int k = 0; k <= kEdge; k++) {
+    const double t = static_cast<double>(k) / kEdge;
+    const double xs[4] = {x0 + t * (x1 - x0), x0 + t * (x1 - x0), x0, x1};
+    const double ys[4] = {y0, y1, y0 + t * (y1 - y0), y0 + t * (y1 - y0)};
+    for (int e = 0; e < 4; e++) {
+      double lon = 0.0, lat = 0.0;
+      if (!projection.inverse(xs[e], ys[e], lon, lat))
+        return false;
+      if (first) {
+        bounds = GeoBounds{lon, lon, lat, lat};
+        first = false;
+      }
+      bounds.west = std::min(bounds.west, lon);
+      bounds.east = std::max(bounds.east, lon);
+      bounds.south = std::min(bounds.south, lat);
+      bounds.north = std::max(bounds.north, lat);
+    }
+  }
+  if (!bounds.valid())
+    return false;
+  const double aspect = (bounds.north - bounds.south) /
+                        ((bounds.east - bounds.west) * std::max(0.05, std::cos(0.5 * (bounds.south + bounds.north) * 3.14159265358979323846 / 180.0)));
+  const int width = std::clamp(static_cast<int>(projected.width() * 1.2), 16, kMaxLayerPixels);
+  const int height = std::clamp(static_cast<int>(width * aspect), 16, kMaxLayerPixels);
+  out = QImage(width, height, QImage::Format_ARGB32);
+  out.fill(Qt::transparent);
+  for (int py = 0; py < height; py++) {
+    auto *line = reinterpret_cast<QRgb *>(out.scanLine(py));
+    const double lat = bounds.north - (py + 0.5) / height * (bounds.north - bounds.south);
+    for (int px = 0; px < width; px++) {
+      const double lon = bounds.west + (px + 0.5) / width * (bounds.east - bounds.west);
+      double x = 0.0, y = 0.0;
+      if (!projection.forward(lon, lat, x, y))
+        continue;
+      const int ix = static_cast<int>(std::floor((x - x0) / (x1 - x0) * projected.width()));
+      const int iy = static_cast<int>(std::floor((y1 - y) / (y1 - y0) * projected.height()));
+      if (ix < 0 || iy < 0 || ix >= projected.width() || iy >= projected.height())
+        continue;
+      line[px] = projected.pixel(ix, iy);
+    }
+  }
+  return true;
+}
 
 QDateTime fromEpoch(double t) { return QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(t * 1000.0)); }
 
@@ -69,18 +122,21 @@ ProjectViewModel::ProjectViewModel(Kernel *kernel, std::shared_ptr<IProjectServi
                                  QStringLiteral("missing"), QStringLiteral("inspected"), QStringLiteral("records"),
                                  QStringLiteral("timeStart"), QStringLiteral("timeEnd"), QStringLiteral("trackKm"),
                                  QStringLiteral("depthMin"), QStringLiteral("depthMax"), QStringLiteral("sizeMB"),
-                                 QStringLiteral("selected")},
+                                 QStringLiteral("selected"), QStringLiteral("status"), QStringLiteral("versions")},
                                 QStringLiteral("lineId"), this);
   products_ = new VariantListModel({QStringLiteral("assetId"), QStringLiteral("label"), QStringLiteral("type"),
                                     QStringLiteral("path"), QStringLiteral("fileName"), QStringLiteral("parent"),
                                     QStringLiteral("quality"), QStringLiteral("mappable"), QStringLiteral("layer"),
                                     QStringLiteral("visible"), QStringLiteral("opacity"), QStringLiteral("colorMap"),
-                                    QStringLiteral("hillshade"), QStringLiteral("exists"), QStringLiteral("job")},
+                                    QStringLiteral("hillshade"), QStringLiteral("exists"), QStringLiteral("job"),
+                                    QStringLiteral("status"), QStringLiteral("staleInputs"),
+                                    QStringLiteral("regenerable")},
                                    QStringLiteral("assetId"), this);
   history_ = new VariantListModel({QStringLiteral("sequence"), QStringLiteral("kind"), QStringLiteral("title"),
                                    QStringLiteral("state"), QStringLiteral("started"), QStringLiteral("duration"),
                                    QStringLiteral("error"), QStringLiteral("commands"), QStringLiteral("logPath"),
-                                   QStringLiteral("outputs"), QStringLiteral("jobId")},
+                                   QStringLiteral("outputs"), QStringLiteral("jobId"), QStringLiteral("attempt"),
+                                   QStringLiteral("retryOf"), QStringLiteral("canRetry"), QStringLiteral("lineCount")},
                                   QStringLiteral("sequence"), this);
   recent_ = settings_.value(QStringLiteral("projects/recent")).toStringList();
   if (kernel_ != nullptr && project_) {
@@ -147,6 +203,7 @@ void ProjectViewModel::onChanged(const QString &what) {
   }
   if (what == QLatin1String("lines")) {
     refreshLines();
+    refreshProducts();  // product states follow the lines
     loadTracks();
   } else if (what == QLatin1String("assets") || what == QLatin1String("layers")) {
     refreshProducts();
@@ -212,6 +269,8 @@ void ProjectViewModel::refreshLines() {
     m[QStringLiteral("depthMax")] = l.depthMax;
     m[QStringLiteral("sizeMB")] = static_cast<double>(l.size) / (1024.0 * 1024.0);
     m[QStringLiteral("selected")] = selected_.contains(q(l.id));
+    m[QStringLiteral("status")] = q(l.processingStatus());
+    m[QStringLiteral("versions")] = l.processedEdit >= 0 ? 3 : l.processingPath.empty() ? 1 : 2;
     items.push_back(m);
   }
   lines_->setItems(items);
@@ -255,6 +314,9 @@ void ProjectViewModel::refreshProducts() {
     m[QStringLiteral("hillshade")] = layer != layerData_.end() ? layer->hillshade : true;
     m[QStringLiteral("exists")] = QFileInfo::exists(q(a->path));
     m[QStringLiteral("job")] = static_cast<double>(a->job);
+    m[QStringLiteral("status")] = q(a->status);
+    m[QStringLiteral("staleInputs")] = a->staleInputs;
+    m[QStringLiteral("regenerable")] = a->regenerable && a->job > 0;
     items.push_back(m);
   }
   products_->setItems(items);
@@ -285,6 +347,10 @@ void ProjectViewModel::refreshHistory() {
       outputs << QDir::toNativeSeparators(q(o));
     m[QStringLiteral("outputs")] = outputs;
     m[QStringLiteral("jobId")] = static_cast<double>(r.jobId);
+    m[QStringLiteral("attempt")] = r.attempt;
+    m[QStringLiteral("retryOf")] = static_cast<double>(r.retryOf);
+    m[QStringLiteral("canRetry")] = !r.request.empty() && r.kind != "edit" && r.state != "queued" && r.state != "running";
+    m[QStringLiteral("lineCount")] = static_cast<int>(r.lines.size());
     items.push_back(m);
   }
   history_->setItems(items);
@@ -333,6 +399,29 @@ QVariantMap ProjectViewModel::summary() const {
   m[QStringLiteral("east")] = b.east;
   m[QStringLiteral("south")] = b.south;
   m[QStringLiteral("north")] = b.north;
+  return m;
+}
+
+QVariantMap ProjectViewModel::nextAction() const {
+  QVariantMap m;
+  if (!project_ || !open_)
+    return m;
+  const NextAction next = project_->nextAction();
+  m[QStringLiteral("kind")] = q(next.kind);
+  m[QStringLiteral("count")] = next.count;
+  // the reason in the interface language
+  QString reason;
+  if (next.kind == "import")
+    reason = tr("Add the survey lines of the project.");
+  else if (next.kind == "preprocess")
+    reason = tr("%n survey line(s) are in a raw vendor format; preprocess them first.", nullptr, next.count);
+  else if (next.kind == "process")
+    reason = tr("%n survey line(s) have edits or corrections that are not applied yet.", nullptr, next.count);
+  else if (next.kind == "regenerate")
+    reason = tr("%n product(s) were made from data that has changed since.", nullptr, next.count);
+  else if (next.kind == "grid")
+    reason = tr("Make a terrain model of the survey.");
+  m[QStringLiteral("reason")] = reason;
   return m;
 }
 
@@ -508,6 +597,18 @@ void ProjectViewModel::selectAll() {
   emit mapChanged();
 }
 
+void ProjectViewModel::selectIds(const QStringList &ids) {
+  selected_.clear();
+  for (const auto &l : lineData_)
+    if (ids.contains(q(l.id)))
+      selected_.insert(q(l.id));
+  anchor_ = ids.isEmpty() ? QString() : ids.last();
+  refreshLines();
+  emit selectionChanged();
+  mapRevision_++;
+  emit mapChanged();
+}
+
 void ProjectViewModel::clearSelection() {
   if (selected_.isEmpty())
     return;
@@ -627,17 +728,95 @@ QString ProjectViewModel::newestProductOfJob(qint64 jobId) const {
   return QString();
 }
 
+QString ProjectViewModel::newestAssetOfJob(qint64 jobId) const {
+  std::int64_t sequence = -1;
+  for (const auto &r : historyData_)
+    if (r.jobId == jobId)
+      sequence = r.sequence;
+  if (sequence < 0 && project_ && open_)
+    for (const auto &r : project_->history())
+      if (r.jobId == jobId)
+        sequence = r.sequence;
+  if (sequence < 0 || !project_)
+    return QString();
+  for (const auto &a : project_->assets())
+    if (a.job == sequence && a.parent.empty())
+      return q(a.id);
+  return QString();
+}
+
+QVariantList ProjectViewModel::lineVersions(const QString &lineId) const {
+  QVariantList out;
+  if (!project_ || !open_)
+    return out;
+  for (const auto &v : project_->lineVersions(lineId.toStdString()))
+    out.push_back(QVariantMap{{QStringLiteral("version"), q(v.version)},
+                              {QStringLiteral("path"), q(v.path)},
+                              {QStringLiteral("format"), v.format},
+                              {QStringLiteral("exists"), v.exists}});
+  return out;
+}
+
+qint64 ProjectViewModel::retryJob(qint64 sequence) {
+  if (!project_ || !open_)
+    return 0;
+  std::string error;
+  const qint64 id = project_->retry(sequence, error);
+  if (id == 0)
+    emit notify(tr("Could not run the job again: %1").arg(q(error)));
+  else
+    emit notify(tr("Running job #%1 again as a new attempt").arg(sequence));
+  return id;
+}
+
+qint64 ProjectViewModel::regenerateProduct(const QString &assetId) {
+  if (!project_ || !open_)
+    return 0;
+  std::string error;
+  const qint64 id = project_->regenerate(assetId.toStdString(), error);
+  if (id == 0)
+    emit notify(tr("Could not make the product again: %1").arg(q(error)));
+  else
+    emit notify(tr("Making the product again with the current data"));
+  return id;
+}
+
+QString ProjectViewModel::layerProblem(const QString &assetId) const {
+  for (const auto &l : layers_)
+    if (l.asset == assetId)
+      return l.error;
+  return QString();
+}
+
+bool ProjectViewModel::hasMapLayer(const QString &assetId) const {
+  for (const auto &l : layers_)
+    if (l.asset == assetId)
+      return l.visible;
+  return false;
+}
+
+bool ProjectViewModel::layerReady(const QString &assetId) const {
+  for (const auto &l : layers_)
+    if (l.asset == assetId)
+      return !l.image.isNull() || !l.error.isEmpty();
+  return true;
+}
+
 QVariantMap ProjectViewModel::valueAt(double lon, double lat) const {
   QVariantMap out;
   for (auto it = layers_.rbegin(); it != layers_.rend(); ++it) {
     if (!it->visible || !it->grid)
       continue;
     const Grid &g = *it->grid;
-    if (lon < g.xmin - 0.5 * g.dx() || lon > g.xmax + 0.5 * g.dx() || lat < g.ymin - 0.5 * g.dy() ||
-        lat > g.ymax + 0.5 * g.dy())
+    // the position in the grid's coordinates
+    double gx = lon, gy = lat;
+    if (!g.geographic && !(it->projection.valid() && it->projection.forward(lon, lat, gx, gy)))
       continue;
-    const int ix = std::clamp(static_cast<int>(std::lround((lon - g.xmin) / g.dx())), 0, g.nx - 1);
-    const int iy = std::clamp(static_cast<int>(std::lround((g.ymax - lat) / g.dy())), 0, g.ny - 1);
+    if (gx < g.xmin - 0.5 * g.dx() || gx > g.xmax + 0.5 * g.dx() || gy < g.ymin - 0.5 * g.dy() ||
+        gy > g.ymax + 0.5 * g.dy())
+      continue;
+    const int ix = std::clamp(static_cast<int>(std::lround((gx - g.xmin) / g.dx())), 0, g.nx - 1);
+    const int iy = std::clamp(static_cast<int>(std::lround((g.ymax - gy) / g.dy())), 0, g.ny - 1);
     const float z = g.at(ix, iy);
     if (std::isnan(z))
       continue;
@@ -709,8 +888,10 @@ void ProjectViewModel::updateLayers() {
         layer.image = old.image;
         layer.bounds = old.bounds;
         layer.grid = old.grid;
+        layer.projection = old.projection;
+        layer.error = old.error;
       }
-    const bool needed = layer.visible && layer.image.isNull() && grids_ && renderer_;
+    const bool needed = layer.visible && layer.image.isNull() && layer.error.isEmpty() && grids_ && renderer_;
     next.push_back(layer);
     if (!needed)
       continue;
@@ -735,9 +916,12 @@ void ProjectViewModel::updateLayers() {
           m.image = r.image;
           m.bounds = r.bounds;
           m.grid = r.grid;
+          m.projection = r.projection;
+          m.error = r.ok ? QString() : (r.error.isEmpty() ? tr("The grid could not be read") : r.error);
         }
       if (!r.ok && !r.error.isEmpty())
         emit notify(r.error);
+      emit layerLoaded(id, r.ok, r.ok ? QString() : r.error);
       mapRevision_++;
       emit mapChanged();
     });
@@ -750,9 +934,12 @@ void ProjectViewModel::updateLayers() {
         return r;
       }
       const Grid &g = loaded.grid;
-      if (!g.geographic) {
-        r.error = QCoreApplication::translate("ProjectViewModel",
-                                              "%1 is a projected grid; open it in the grid view to see it")
+      const platform::MapProjection projection =
+          g.geographic ? platform::MapProjection::parse("") : platform::MapProjection::parse(g.projection);
+      if (!g.geographic && (!projection.valid() || projection.geographic())) {
+        r.error = QCoreApplication::translate(
+                      "ProjectViewModel",
+                      "%1 is a projected grid whose projection is not recorded in the file; open it in the grid view")
                       .arg(QFileInfo(q(path)).fileName());
         return r;
       }
@@ -763,8 +950,24 @@ void ProjectViewModel::updateLayers() {
                static_cast<size_t>(image.width) * 4);
       if (out.width() > kMaxLayerPixels || out.height() > kMaxLayerPixels)
         out = out.scaled(kMaxLayerPixels, kMaxLayerPixels, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      if (!g.geographic) {
+        QImage warped;
+        GeoBounds geo;
+        if (!warpToGeographic(g, out, projection, warped, geo)) {
+          r.error = QCoreApplication::translate("ProjectViewModel", "%1 could not be placed on the map (%2)")
+                        .arg(QFileInfo(q(path)).fileName(), QString::fromStdString(projection.name()));
+          return r;
+        }
+        r.image = warped;
+        r.bounds = geo;
+        r.projection = projection;
+        r.grid = std::make_shared<const Grid>(std::move(loaded.grid));
+        r.ok = true;
+        return r;
+      }
       r.image = out;
       r.bounds = GeoBounds{g.xmin - 0.5 * g.dx(), g.xmax + 0.5 * g.dx(), g.ymin - 0.5 * g.dy(), g.ymax + 0.5 * g.dy()};
+      r.projection = projection;
       r.grid = std::make_shared<const Grid>(std::move(loaded.grid));
       r.ok = true;
       return r;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "mb-studio",
-  "version-semver": "0.2.0",
+  "version-semver": "0.3.0",
   "description": "MB-Studio: native Windows distribution of MB-System with a Qt6/QML desktop GUI",
   "homepage": "https://github.com/Sqhh99/MB-Studio",
   "license": "GPL-3.0-or-later",

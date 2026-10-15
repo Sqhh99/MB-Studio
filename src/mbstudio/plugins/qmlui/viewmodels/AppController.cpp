@@ -4,8 +4,8 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
-#include <QGuiApplication>
 #include <QFutureWatcher>
+#include <QGuiApplication>
 #include <QPointer>
 #include <QProcess>
 #include <QSysInfo>
@@ -18,7 +18,9 @@
 #include "LogModel.h"
 #include "ProcessingViewModel.h"
 #include "ProjectViewModel.h"
+#include "SoundingEditorModel.h"
 #include "SwathViewModel.h"
+#include "TerrainViewModel.h"
 #include "ToolsViewModel.h"
 #include "Translator.h"
 #include "WorkspaceModel.h"
@@ -28,6 +30,7 @@
 #include "mbstudio/api/JobService.h"
 #include "mbstudio/api/ProcessingService.h"
 #include "mbstudio/api/ProjectService.h"
+#include "mbstudio/api/SoundingService.h"
 #include "mbstudio/api/SwathService.h"
 #include "mbstudio/api/ToolService.h"
 #include "mbstudio/kernel/Kernel.h"
@@ -37,6 +40,7 @@ namespace mbstudio::ui {
 
 namespace {
 constexpr int kMaxRecent = 12;
+constexpr int kMaxEditorLines = 12;  // lines edited at once without selecting them
 }
 
 AppController::AppController(Kernel *kernel, QObject *parent)
@@ -48,38 +52,50 @@ AppController::AppController(Kernel *kernel, QObject *parent)
   language_ = settings_.value(QStringLiteral("ui/language")).toString();
 
   std::shared_ptr<IFormatService> formatService;
-  std::shared_ptr<ISwathService> swathService;
-  std::shared_ptr<IGridService> gridService;
-  std::shared_ptr<IGridRenderService> renderService;
   std::shared_ptr<IToolService> toolService;
   std::shared_ptr<IHelpService> helpService;
   std::shared_ptr<IJobService> jobService;
-  std::shared_ptr<IProjectService> projectService;
   std::shared_ptr<IProcessingService> processingService;
   if (kernel_ != nullptr) {
     jobService = kernel_->services().get<IJobService>();
-    projectService = kernel_->services().get<IProjectService>();
+    projectService_ = kernel_->services().get<IProjectService>();
     processingService = kernel_->services().get<IProcessingService>();
     formatService = kernel_->services().get<IFormatService>();
-    swathService = kernel_->services().get<ISwathService>();
-    gridService = kernel_->services().get<IGridService>();
-    renderService = kernel_->services().get<IGridRenderService>();
+    swathService_ = kernel_->services().get<ISwathService>();
+    gridService_ = kernel_->services().get<IGridService>();
+    renderService_ = kernel_->services().get<IGridRenderService>();
+    soundingService_ = kernel_->services().get<ISoundingService>();
     toolService = kernel_->services().get<IToolService>();
     helpService = kernel_->services().get<IHelpService>();
   }
   formats_ = new FormatListModel(formatService, this);
-  swath_ = new SwathViewModel(swathService, this);
-  grid_ = new GridViewModel(gridService, renderService, this);
   tools_ = new ToolsViewModel(toolService, helpService, this);
   log_ = new LogModel(kernel_, this);
   jobs_ = new JobListModel(kernel_, jobService, this);
-  project_ = new ProjectViewModel(kernel_, projectService, gridService, renderService, this);
-  processing_ = new ProcessingViewModel(projectService, processingService, project_, this);
+  jobs_->setProjectService(projectService_);
+  project_ = new ProjectViewModel(kernel_, projectService_, gridService_, renderService_, this);
+  processing_ = new ProcessingViewModel(projectService_, processingService, project_, this);
   workspaces_ = new WorkspaceModel(kernel_, this);
+  workspaces_->setDocumentFactory([this](const QString &workspace, const QString &argument, QObject *parent) {
+    return createDocument(workspace, argument, parent);
+  });
   connect(project_, &ProjectViewModel::notify, this, &AppController::notify);
   connect(processing_, &ProcessingViewModel::notify, this, &AppController::notify);
+  connect(jobs_, &JobListModel::notify, this, &AppController::notify);
   connect(project_, &ProjectViewModel::projectChanged, this, &AppController::onProjectChanged);
   connect(jobs_, &JobListModel::jobFinished, this, &AppController::onJobFinished);
+  // a grid job reports where its result is once the map has drawn it
+  connect(project_, &ProjectViewModel::layerLoaded, this, [this](const QString &asset, bool shown, const QString &problem) {
+    const auto it = pendingLayerNotices_.find(asset);
+    if (it == pendingLayerNotices_.end())
+      return;
+    const QString title = it.value();
+    pendingLayerNotices_.erase(it);
+    if (shown)
+      emit notify(tr("%1 finished; the result is on the map").arg(title));
+    else
+      emit notify(tr("%1 finished, but it cannot be shown on the map: %2").arg(title, problem));
+  });
   // the open documents are part of the project
   saveWorkspaceTimer_.setSingleShot(true);
   saveWorkspaceTimer_.setInterval(500);
@@ -93,14 +109,13 @@ AppController::AppController(Kernel *kernel, QObject *parent)
   };
   connect(workspaces_, &WorkspaceModel::countChanged, this, scheduleSave);
   connect(workspaces_, &WorkspaceModel::currentChanged, this, scheduleSave);
+  connect(workspaces_, &WorkspaceModel::layoutChanged, this, scheduleSave);
+  connect(workspaces_, &WorkspaceModel::stateChanged, this, scheduleSave);
+  connect(workspaces_, &WorkspaceModel::countChanged, this, &AppController::unsavedEditsChanged);
+  connect(workspaces_, &WorkspaceModel::currentChanged, this, [this]() { setCursorText(QString()); });
   tools_->setWorkingDirectory(settings_.value(QStringLiteral("tools/workingDirectory"), QDir::homePath()).toString());
   connect(tools_, &ToolsViewModel::argumentsChanged, this, [this]() {
     settings_.setValue(QStringLiteral("tools/workingDirectory"), tools_->workingDirectory());
-  });
-
-  connect(swath_, &SwathViewModel::finished, this, [this](bool ok) {
-    if (!ok)
-      emit notify(tr("Could not read %1: %2").arg(swath_->fileName(), swath_->error()));
   });
 
   translator_ = new JsonTranslator(this);
@@ -108,6 +123,49 @@ AppController::AppController(Kernel *kernel, QObject *parent)
 }
 
 AppController::~AppController() = default;
+
+QObject *AppController::createDocument(const QString &workspace, const QString &argument, QObject *parent) {
+  if (workspace == QLatin1String("grid")) {
+    auto *grid = new GridViewModel(gridService_, renderService_, parent);
+    grid->load(argument);
+    connect(grid, &GridViewModel::stateChanged, this, [this, grid]() {
+      if (!grid->error().isEmpty())
+        emit notify(tr("Could not read %1: %2").arg(grid->fileName(), grid->error()));
+    });
+    return grid;
+  }
+  if (workspace == QLatin1String("terrain")) {
+    auto *terrain = new TerrainViewModel(gridService_, renderService_, parent);
+    terrain->load(argument);
+    return terrain;
+  }
+  if (workspace == QLatin1String("inspect")) {
+    auto *swath = new SwathViewModel(swathService_, parent);
+    connect(swath, &SwathViewModel::finished, this, [this, swath](bool ok) {
+      if (!ok)
+        emit notify(tr("Could not read %1: %2").arg(swath->fileName(), swath->error()));
+    });
+    if (argument.startsWith(QLatin1String("line:"))) {
+      const QString id = argument.mid(5);
+      swath->setLine(id, project_->lineVersions(id), QString());
+    } else {
+      swath->inspect(argument, formats_->identify(argument));
+    }
+    return swath;
+  }
+  if (workspace == QLatin1String("editor")) {
+    auto *editor = new SoundingEditorModel(projectService_, soundingService_, renderService_, parent);
+    connect(editor, &SoundingEditorModel::notify, this, &AppController::notify);
+    connect(editor, &SoundingEditorModel::countsChanged, this, &AppController::unsavedEditsChanged);
+    connect(editor, &SoundingEditorModel::saved, this, [this]() {
+      emit notify(tr("Edits saved; process the survey lines to apply them"));
+      emit unsavedEditsChanged();
+    });
+    editor->load(argument.split(QLatin1Char(','), Qt::SkipEmptyParts));
+    return editor;
+  }
+  return nullptr;
+}
 
 QString AppController::version() const {
   return kernel_ != nullptr ? QString::fromStdString(kernel_->config().version) : QString();
@@ -215,15 +273,35 @@ QVariantList AppController::commands() const {
   return out;
 }
 
+QStringList AppController::colorMaps() const {
+  QStringList out;
+  if (renderService_)
+    for (const auto &name : renderService_->colorMapNames())
+      out << QString::fromStdString(name);
+  return out;
+}
+
 QObject *AppController::formats() const { return formats_; }
-QObject *AppController::swath() const { return swath_; }
-QObject *AppController::grid() const { return grid_; }
 QObject *AppController::tools() const { return tools_; }
 QObject *AppController::log() const { return log_; }
 QObject *AppController::project() const { return project_; }
 QObject *AppController::jobs() const { return jobs_; }
 QObject *AppController::processing() const { return processing_; }
 QObject *AppController::workspaces() const { return workspaces_; }
+
+bool AppController::unsavedEdits() const {
+  for (QObject *doc : workspaces_->documents())
+    if (auto *editor = qobject_cast<SoundingEditorModel *>(doc); editor != nullptr && editor->editCount() > 0)
+      return true;
+  return false;
+}
+
+void AppController::setCursorText(const QString &text) {
+  if (text == cursorText_)
+    return;
+  cursorText_ = text;
+  emit cursorTextChanged();
+}
 
 QVariantList AppController::actions() const {
   QVariantList out;
@@ -242,7 +320,6 @@ QVariantList AppController::actions() const {
   }
   return out;
 }
-
 
 bool AppController::isGridFile(const QString &path) {
   const QString suffix = QFileInfo(path).suffix().toLower();
@@ -288,8 +365,7 @@ QString AppController::openFile(const QString &path) {
     openGrid(info.absoluteFilePath());
     workspace = QStringLiteral("grid");
   } else if (const int format = formats_->identify(path); format > 0) {
-    swath_->inspect(info.absoluteFilePath(), format);
-    workspaces_->open(QStringLiteral("inspect"), QString(), tr("Line: %1").arg(info.fileName()));
+    workspaces_->open(QStringLiteral("inspect"), info.absoluteFilePath(), tr("Line: %1").arg(info.fileName()));
     workspace = QStringLiteral("inspect");
   } else if (format < 0) {
     // a datalist: summarise all of its files with mbinfo
@@ -306,11 +382,16 @@ QString AppController::openFile(const QString &path) {
 
 QString AppController::openUrl(const QUrl &url) { return openFile(toLocalFile(url)); }
 
-void AppController::openGrid(const QString &path) {
+int AppController::openGrid(const QString &path, int group) {
   if (path.isEmpty())
-    return;
-  grid_->load(path);
-  workspaces_->open(QStringLiteral("grid"), path, tr("Grid: %1").arg(QFileInfo(path).fileName()));
+    return -1;
+  return workspaces_->open(QStringLiteral("grid"), path, tr("Grid: %1").arg(QFileInfo(path).fileName()), group);
+}
+
+int AppController::openTerrain(const QString &path, int group) {
+  if (path.isEmpty())
+    return -1;
+  return workspaces_->open(QStringLiteral("terrain"), path, tr("3D: %1").arg(QFileInfo(path).fileName()), group);
 }
 
 void AppController::openWorkspace(const QString &workspace) {
@@ -318,14 +399,47 @@ void AppController::openWorkspace(const QString &workspace) {
     emit notify(tr("The view %1 is not available").arg(workspace));
 }
 
-void AppController::inspectLine(const QString &lineId) {
+int AppController::inspectLine(const QString &lineId, const QString &version) {
   const QVariantMap line = project_->lineInfo(lineId);
-  const QString path = line.value(QStringLiteral("path")).toString();
-  if (path.isEmpty())
-    return;
-  swath_->inspect(QDir::fromNativeSeparators(path), line.value(QStringLiteral("format")).toInt());
-  workspaces_->open(QStringLiteral("inspect"), QString(),
-                    tr("Line: %1").arg(line.value(QStringLiteral("name")).toString()));
+  if (line.isEmpty())
+    return -1;
+  const int index = workspaces_->open(QStringLiteral("inspect"), QStringLiteral("line:") + lineId,
+                                      tr("Line: %1").arg(line.value(QStringLiteral("name")).toString()));
+  if (!version.isEmpty())
+    if (auto *swath = qobject_cast<SwathViewModel *>(workspaces_->document(index)))
+      swath->setVersion(version);
+  return index;
+}
+
+int AppController::openEditor(const QStringList &lineIds) {
+  QStringList ids = lineIds;
+  if (ids.isEmpty())
+    ids = project_->selectedIds();
+  if (ids.isEmpty()) {
+    if (project_->lineCount() > kMaxEditorLines) {
+      emit notify(tr("Select the survey lines to edit (up to about %1 at a time)").arg(kMaxEditorLines));
+      return -1;
+    }
+    if (projectService_ && projectService_->isOpen())
+      for (const auto &l : projectService_->lines())
+        if (!l.missing)
+          ids << QString::fromStdString(l.id);
+  }
+  if (ids.isEmpty()) {
+    emit notify(tr("Add survey lines to the project to edit their soundings"));
+    return -1;
+  }
+  const QString title = ids.size() == 1 ? tr("Edit: %1").arg(project_->lineInfo(ids.first()).value(QStringLiteral("name")).toString())
+                                        : tr("Edit: %n lines", nullptr, static_cast<int>(ids.size()));
+  return workspaces_->open(QStringLiteral("editor"), ids.join(QLatin1Char(',')), title);
+}
+
+int AppController::openFigure(const QString &assetId) {
+  const QVariantMap info = project_->productInfo(assetId);
+  if (info.isEmpty())
+    return -1;
+  return workspaces_->open(QStringLiteral("figure"), assetId,
+                           tr("Figure: %1").arg(info.value(QStringLiteral("label")).toString()));
 }
 
 void AppController::onProjectChanged() {
@@ -338,26 +452,46 @@ void AppController::onProjectChanged() {
   // the documents that were open when the project was saved
   restoringWorkspace_ = true;
   workspaces_->restoreState(project_->workspaceState());
-  const int map = workspaces_->indexOf(QStringLiteral("map"));
-  if (map < 0)
+  if (workspaces_->indexOf(QStringLiteral("map")) < 0)
     workspaces_->open(QStringLiteral("map"));
-  else
-    workspaces_->setCurrentIndex(map);
   restoringWorkspace_ = false;
 }
 
 void AppController::onJobFinished(qint64 id, const QString &kind, const QString &state, const QString &title,
                                   const QString &error) {
+  // the sounding editors wait for their save jobs
+  for (QObject *doc : workspaces_->documents())
+    if (auto *editor = qobject_cast<SoundingEditorModel *>(doc))
+      editor->jobFinished(id, state, error);
   if (state == QLatin1String("failed")) {
     emit notify(tr("%1 failed: %2").arg(title, error));
     return;
   }
   if (state != QLatin1String("completed"))
     return;
-  if ((kind == QLatin1String("grid") || kind == QLatin1String("mosaic")) &&
-      !project_->newestProductOfJob(id).isEmpty()) {
-    emit notify(tr("%1 finished; the result is on the map").arg(title));
-    return;
+  if (kind == QLatin1String("edit"))
+    return;  // reported by the editor
+  if (kind == QLatin1String("grid") || kind == QLatin1String("mosaic")) {
+    const QString asset = project_->newestAssetOfJob(id);
+    if (!asset.isEmpty() && project_->hasMapLayer(asset)) {
+      // reported once the map has drawn (or failed to draw) the layer
+      if (!project_->layerReady(asset)) {
+        pendingLayerNotices_.insert(asset, title);
+        return;
+      }
+      const QString problem = project_->layerProblem(asset);
+      emit notify(problem.isEmpty() ? tr("%1 finished; the result is on the map").arg(title)
+                                    : tr("%1 finished, but it cannot be shown on the map: %2").arg(title, problem));
+      return;
+    }
+  }
+  if (kind == QLatin1String("figure")) {
+    const QString asset = project_->newestAssetOfJob(id);
+    if (!asset.isEmpty()) {
+      openFigure(asset);
+      emit notify(tr("%1 finished").arg(title));
+      return;
+    }
   }
   emit notify(tr("%1 finished").arg(title));
 }

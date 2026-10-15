@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "mbstudio/api/JobService.h"
+#include "mbstudio/api/ProjectService.h"
 #include "mbstudio/kernel/EventBus.h"
 
 namespace mbstudio {
@@ -41,7 +42,10 @@ class JobListModel : public QAbstractListModel {
     LogPathRole,
     OutputsRole,
     WorkingDirectoryRole,
-    RetryOfRole
+    RetryOfRole,
+    BlockedByRole,
+    OwnerRole,
+    CanRetryRole
   };
 
   JobListModel(Kernel *kernel, std::shared_ptr<IJobService> jobs, QObject *parent = nullptr);
@@ -56,6 +60,9 @@ class JobListModel : public QAbstractListModel {
   int failedCount() const;
   bool available() const { return service_ != nullptr; }
   QString activity() const;
+
+  // Project jobs are repeated by the project (a new attempt in its history).
+  void setProjectService(std::shared_ptr<IProjectService> project) { project_ = std::move(project); }
 
   Q_INVOKABLE bool cancel(qint64 id);
   Q_INVOKABLE qint64 retry(qint64 id);
@@ -72,11 +79,13 @@ class JobListModel : public QAbstractListModel {
   void countChanged();
   // a job reached completed, failed or cancelled
   void jobFinished(qint64 id, const QString &kind, const QString &state, const QString &title, const QString &error);
+  void notify(const QString &message);
 
  private:
   void scheduleRefresh();
   Kernel *kernel_;
   std::shared_ptr<IJobService> service_;
+  std::shared_ptr<IProjectService> project_;
   QVector<JobInfo> jobs_;  // newest first
   QTimer refreshTimer_;
   QTimer clockTimer_;

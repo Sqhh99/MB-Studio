@@ -143,6 +143,47 @@ struct ExportParameters {
   double exaggeration = 1.0;     // glTF
 };
 
+// A cartographic figure made with GMT (modern mode). Each figure job runs in
+// its own GMT session (GMT_SESSION_NAME) with private temporary and session
+// directories (GMT_TMPDIR and GMT_SESSIONDIR).
+struct FigureParameters {
+  std::string kind = "bathymetry";   // bathymetry | overview | quality | perspective
+  std::string grid;                  // GMT grid (empty: survey lines only, "overview")
+  bool geographic = true;            // the grid is in geographic coordinates
+  std::vector<std::string> tracks;   // ".fnv" navigation files drawn on the map
+  bool showTracks = false;           // draw the survey lines (always for "overview")
+  GeoBounds region;                  // invalid: the extent of the grid (or the tracks)
+  GeoBounds gridBounds;              // extent of the grid if known (scale bar length)
+  double widthCm = 16.0;             // width of the map
+  std::string palette = "haxby";     // GMT colour table (makecpt -C)
+  bool reversePalette = false;
+  double contourInterval = 0.0;      // 0: no contours
+  double annotationInterval = 0.0;   // labelled contours, 0: none
+  bool illumination = true;
+  double lightAzimuth = 315.0;
+  double viewAzimuth = 150.0;        // perspective view
+  double viewElevation = 30.0;
+  double reliefHeightCm = 4.0;       // perspective: height of the z axis
+  bool colorbar = true;
+  bool scaleBar = true;              // geographic maps only
+  std::string title;                 // ASCII (GMT's standard fonts)
+  std::string zLabel = "Depth (m)";
+  std::vector<std::string> formats = {"png", "pdf"};  // png, pdf, ps
+  int dpi = 300;
+  std::string outputRoot;            // file name root, without extension
+  std::string session;               // GMT session name, unique per job
+  std::string temporaryDirectory;    // absolute; GMT session files go here
+  std::string ghostscript;           // Ghostscript program for psconvert ("" default)
+};
+
+// What figure output needs, checked before a job starts.
+struct FigureDependencies {
+  bool gmt = false;
+  bool ghostscript = false;          // PNG and PDF output (psconvert)
+  std::string ghostscriptPath;
+  std::string message;               // what is missing, for the user
+};
+
 class IProcessingService {
  public:
   static constexpr const char *kServiceId = "mbsystem.processing";
@@ -174,6 +215,8 @@ class IProcessingService {
   virtual CommandPlan mosaic(const std::string &datalist, const MosaicParameters &p) const = 0;
   virtual CommandPlan exportGrid(const std::string &grid, const ExportParameters &p) const = 0;
   virtual CommandPlan exportSoundings(const std::string &datalist, const ExportParameters &p) const = 0;
+  virtual FigureDependencies figureDependencies() const = 0;
+  virtual CommandPlan figure(const FigureParameters &p) const = 0;
 };
 
 }  // namespace mbstudio

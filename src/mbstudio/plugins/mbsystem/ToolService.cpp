@@ -116,6 +116,13 @@ std::string ToolService::locate(const std::string &name) const {
         return nested;
     }
   }
+  // GMT installed by the system (Linux, macOS) rather than with MB-Studio
+  if (name == "gmt")
+    for (const auto &dir : platform::splitPathList(platform::getEnv("PATH"))) {
+      const std::string candidate = platform::joinPath(dir, file);
+      if (!dir.empty() && platform::fileExists(candidate) && !platform::isDirectory(candidate))
+        return candidate;
+    }
   return std::string();
 }
 
@@ -152,6 +159,13 @@ platform::ProcessResult ToolService::run(const std::string &name, const std::vec
                                          const std::string &workingDirectory,
                                          const platform::OutputHandler &output,
                                          const std::atomic<bool> *cancel) const {
+  return runWithEnvironment(name, arguments, workingDirectory, {}, output, cancel);
+}
+
+platform::ProcessResult ToolService::runWithEnvironment(
+    const std::string &name, const std::vector<std::string> &arguments, const std::string &workingDirectory,
+    const std::vector<std::pair<std::string, std::string>> &environment, const platform::OutputHandler &output,
+    const std::atomic<bool> *cancel) const {
   platform::ProcessResult result;
   ToolInfo info;
   if (!tool(name, info)) {
@@ -177,6 +191,8 @@ platform::ProcessResult ToolService::run(const std::string &name, const std::vec
   const std::string current = platform::getEnv("PATH");
   spec.environment.emplace_back("PATH", platform::parentPath(info.path) +
                                             (current.empty() ? std::string() : platform::pathListSeparator() + current));
+  for (const auto &kv : environment)
+    spec.environment.push_back(kv);
   result = platform::runProcess(
       spec,
       [&](const std::string &chunk) {

@@ -1,5 +1,5 @@
 // MB-Studio QML UI - the processing panels (preprocess, clean, corrections,
-// process, grid, mosaic, export). Each kind has a declarative parameter
+// process, grid, mosaic, export, figure). Each kind has a declarative parameter
 // schema (fields with type, unit, range, options and visibility rules) that
 // the QML panel renders generically; the mapping of the values to the typed
 // recipe parameters, and from there to program options, is explicit C++.
@@ -59,6 +59,9 @@ class ProcessingViewModel : public QObject {
   // options of an enum field whose choices depend on the project (export source)
   Q_INVOKABLE QVariantList options(const QString &key) const;
   Q_INVOKABLE void resetDefaults();
+  // Fill the panel with the request of a history entry (to change and run
+  // it again); returns false if the entry has no recorded request.
+  Q_INVOKABLE bool loadRequest(qint64 sequence);
   // Start the job; returns its id (0 on error, see error / notify).
   Q_INVOKABLE qint64 run();
   Q_INVOKABLE void updatePreview();

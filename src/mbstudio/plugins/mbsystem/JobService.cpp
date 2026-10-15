@@ -74,7 +74,49 @@ void JobService::publish(const std::string &topic, const std::shared_ptr<Job> &j
                            {"steps", static_cast<std::int64_t>(info.stepCount)},
                            {"stepTitle", info.stepTitle},
                            {"exitCode", static_cast<std::int64_t>(info.exitCode)},
+                           {"blockedBy", info.blockedBy},
                            {"error", info.error}});
+}
+
+std::int64_t JobService::blockerLocked(std::size_t position) const {
+  const auto it = jobs_.find(queue_[position]);
+  if (it == jobs_.end())
+    return 0;
+  const JobSpec &spec = it->second->spec;
+  for (const auto &running : active_)
+    if (jobsConflict(spec, running->spec))
+      return running->info.id;
+  // keep the submission order of conflicting jobs
+  for (std::size_t k = 0; k < position; k++) {
+    const auto earlier = jobs_.find(queue_[k]);
+    if (earlier != jobs_.end() && jobsConflict(spec, earlier->second->spec))
+      return earlier->second->info.id;
+  }
+  return 0;
+}
+
+int JobService::runnableLocked() const {
+  if (static_cast<int>(active_.size()) >= maxConcurrent_)
+    return -1;
+  for (std::size_t i = 0; i < queue_.size(); i++)
+    if (blockerLocked(i) == 0)
+      return static_cast<int>(i);
+  return -1;
+}
+
+std::vector<std::shared_ptr<JobService::Job>> JobService::updateBlockedLocked() {
+  std::vector<std::shared_ptr<Job>> changed;
+  for (std::size_t i = 0; i < queue_.size(); i++) {
+    const auto it = jobs_.find(queue_[i]);
+    if (it == jobs_.end())
+      continue;
+    const std::int64_t blocker = blockerLocked(i);
+    if (blocker != it->second->info.blockedBy) {
+      it->second->info.blockedBy = blocker;
+      changed.push_back(it->second);
+    }
+  }
+  return changed;
 }
 
 std::int64_t JobService::submit(const JobSpec &spec, std::string *error) { return enqueue(spec, 0, error); }
@@ -110,6 +152,9 @@ std::int64_t JobService::enqueue(const JobSpec &spec, std::int64_t retryOf, std:
   info.outputs = spec.outputs;
   info.parameters = spec.parameters;
   info.retryOf = retryOf;
+  info.retryable = spec.retryable;
+  info.reads = spec.reads;
+  info.writes = spec.writes;
   info.queuedAt = now();
   for (const auto &s : spec.steps)
     if (!s.tool.empty())
@@ -127,6 +172,15 @@ std::int64_t JobService::enqueue(const JobSpec &spec, std::int64_t retryOf, std:
     info.logPath = !spec.logPath.empty()
                        ? spec.logPath
                        : platform::joinPath(info.workingDirectory, "job-" + std::to_string(info.id) + ".log");
+    // what the job will wait for (every queued job was submitted earlier)
+    for (const auto &running : active_)
+      if (info.blockedBy == 0 && jobsConflict(spec, running->spec))
+        info.blockedBy = running->info.id;
+    for (const auto queued : queue_) {
+      const auto it = jobs_.find(queued);
+      if (info.blockedBy == 0 && it != jobs_.end() && jobsConflict(spec, it->second->spec))
+        info.blockedBy = queued;
+    }
     jobs_[info.id] = job;
   }
   // announce the job before a worker can pick it up
@@ -148,13 +202,15 @@ std::int64_t JobService::enqueue(const JobSpec &spec, std::int64_t retryOf, std:
 void JobService::worker() {
   for (;;) {
     std::shared_ptr<Job> job;
+    std::vector<std::shared_ptr<Job>> waiting;
     {
       std::unique_lock<std::mutex> lock(mutex_);
-      changed_.wait(lock, [this] { return stopping_ || (!queue_.empty() && running_ < maxConcurrent_); });
+      changed_.wait(lock, [this] { return stopping_ || runnableLocked() >= 0; });
       if (stopping_)
         return;
-      const std::int64_t id = queue_.front();
-      queue_.pop_front();
+      const int position = runnableLocked();
+      const std::int64_t id = queue_[static_cast<std::size_t>(position)];
+      queue_.erase(queue_.begin() + position);
       const auto it = jobs_.find(id);
       if (it == jobs_.end())
         continue;
@@ -162,21 +218,31 @@ void JobService::worker() {
       if (job->cancel->load()) {
         job->info.state = JobState::Cancelled;
         job->info.finishedAt = now();
+        waiting = updateBlockedLocked();
         lock.unlock();
         publish("job.finished", job);
+        for (const auto &w : waiting)
+          publish("job.waiting", w);
         changed_.notify_all();
         continue;
       }
-      running_++;
+      active_.push_back(job);
       job->info.state = JobState::Running;
       job->info.startedAt = now();
+      job->info.blockedBy = 0;
+      waiting = updateBlockedLocked();
     }
+    for (const auto &w : waiting)
+      publish("job.waiting", w);
     run(job);
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      running_--;
+      active_.erase(std::remove(active_.begin(), active_.end(), job), active_.end());
+      waiting = updateBlockedLocked();
     }
     publish("job.finished", job);
+    for (const auto &w : waiting)
+      publish("job.waiting", w);
     changed_.notify_all();
   }
 }
@@ -240,8 +306,8 @@ void JobService::run(const std::shared_ptr<Job> &job) {
 
     appendLog("$ " + platform::formatCommand(s.tool, s.arguments) + "\n");
     const std::string cwd = s.workingDirectory.empty() ? workingDirectory : s.workingDirectory;
-    const auto result = tools_->run(
-        s.tool, s.arguments, cwd,
+    const auto result = tools_->runWithEnvironment(
+        s.tool, s.arguments, cwd, s.environment,
         [&](const std::string &chunk) {
           appendLog(chunk);
           std::string last;
@@ -299,6 +365,7 @@ void JobService::run(const std::shared_ptr<Job> &job) {
 
 bool JobService::cancel(std::int64_t id) {
   std::shared_ptr<Job> job;
+  std::vector<std::shared_ptr<Job>> waiting;
   bool wasQueued = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -312,11 +379,15 @@ bool JobService::cancel(std::int64_t id) {
       queue_.erase(q);
       job->info.state = JobState::Cancelled;
       job->info.finishedAt = now();
+      job->info.blockedBy = 0;
       wasQueued = true;
+      waiting = updateBlockedLocked();
     }
   }
   if (wasQueued)
     publish("job.finished", job);
+  for (const auto &w : waiting)
+    publish("job.waiting", w);
   changed_.notify_all();
   return true;
 }
@@ -326,7 +397,7 @@ std::int64_t JobService::retry(std::int64_t id) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto it = jobs_.find(id);
-    if (it == jobs_.end() || !finished(it->second->info.state))
+    if (it == jobs_.end() || !finished(it->second->info.state) || !it->second->spec.retryable)
       return 0;
     spec = it->second->spec;
     spec.logPath.clear();  // a new log for the new attempt
