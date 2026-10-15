@@ -1050,8 +1050,15 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 	}
 
 	/* Now make filenames global if local */
+	/* (the directory part ends with the last '/', or on Windows '\\'; without
+	   one there is no directory to prepend) */
 	char *lastslash = strrchr(process->mbp_ifile, '/');
-	const int len = lastslash - process->mbp_ifile + 1;
+#ifdef _WIN32
+	char *lastbackslash = strrchr(process->mbp_ifile, '\\');
+	if (lastbackslash != NULL && (lastslash == NULL || lastbackslash > lastslash))
+		lastslash = lastbackslash;
+#endif
+	const int len = lastslash != NULL ? (int)(lastslash - process->mbp_ifile) + 1 : 0;
 
 	/* reset navadj file */
 	if (len > 1 && strlen(process->mbp_navadjfile) > 1 && process->mbp_navadjfile[0] != '/' &&
@@ -1445,10 +1452,22 @@ int mb_pr_writepar(int verbose, char *file, struct mb_process_struct *process, i
   assert(process != NULL);
 
 	/* try to avoid absolute pathnames - get pwd */
-	char *lastslash = strrchr(file, '/');
-	if (file[0] == '/' && lastslash != NULL) {
-		strcpy(pwd, file);
-		pwd[strlen(file) - strlen(lastslash)] = '\0';
+#ifdef _WIN32
+	/* Windows paths: '\\' separators and absolute paths with a drive letter */
+	mb_path dirfile;
+	strcpy(dirfile, file);
+	for (char *c = dirfile; *c != '\0'; c++)
+		if (*c == '\\')
+			*c = '/';
+	const bool absolute = dirfile[0] == '/' || (dirfile[0] != '\0' && dirfile[1] == ':');
+#else
+	const char *dirfile = file;
+	const bool absolute = file[0] == '/';
+#endif
+	char *lastslash = strrchr(dirfile, '/');
+	if (absolute && lastslash != NULL) {
+		strcpy(pwd, dirfile);
+		pwd[strlen(dirfile) - strlen(lastslash)] = '\0';
 	}
 	else {
     char *getcwd_result = getcwd(pwd, MB_PATH_MAXLINE);
@@ -1456,7 +1475,7 @@ int mb_pr_writepar(int verbose, char *file, struct mb_process_struct *process, i
     assert(getcwd_result != NULL);
 		if (lastslash != NULL) {
 			strcat(pwd, "/");
-			strcat(pwd, file);
+			strcat(pwd, dirfile);
 			lastslash = strrchr(pwd, '/');
 			pwd[strlen(pwd) - strlen(lastslash)] = '\0';
     }
