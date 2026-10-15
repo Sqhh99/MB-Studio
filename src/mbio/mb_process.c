@@ -154,6 +154,17 @@ int mb_pr_checkstatus(int verbose, char *file, int *prstatus, int *error) {
 	return (status);
 }
 /*--------------------------------------------------------------------*/
+/* The last directory separator of a path: '/', on Windows also '\\'. */
+static char *mb_pr_lastseparator(char *path) {
+	char *last = strrchr(path, '/');
+#ifdef _WIN32
+	char *backslash = strrchr(path, '\\');
+	if (backslash != NULL && (last == NULL || backslash > last))
+		last = backslash;
+#endif
+	return last;
+}
+
 int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_struct *process, int *error) {
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -901,7 +912,7 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 
 	/* Make output file global if local */
 	if (process->mbp_ofile[0] != '/' && process->mbp_ofile[1] != ':') {
-		char *lastslash = strrchr(process->mbp_ifile, '/');
+		char *lastslash = mb_pr_lastseparator(process->mbp_ifile);
 		if (lastslash != NULL) {
 			strcpy(dummy, process->mbp_ofile);
 			strcpy(process->mbp_ofile, process->mbp_ifile);
@@ -1050,14 +1061,8 @@ int mb_pr_readpar(int verbose, char *file, int lookforfiles, struct mb_process_s
 	}
 
 	/* Now make filenames global if local */
-	/* (the directory part ends with the last '/', or on Windows '\\'; without
-	   one there is no directory to prepend) */
-	char *lastslash = strrchr(process->mbp_ifile, '/');
-#ifdef _WIN32
-	char *lastbackslash = strrchr(process->mbp_ifile, '\\');
-	if (lastbackslash != NULL && (lastslash == NULL || lastbackslash > lastslash))
-		lastslash = lastbackslash;
-#endif
+	/* (without a directory separator there is no directory to prepend) */
+	char *lastslash = mb_pr_lastseparator(process->mbp_ifile);
 	const int len = lastslash != NULL ? (int)(lastslash - process->mbp_ifile) + 1 : 0;
 
 	/* reset navadj file */
