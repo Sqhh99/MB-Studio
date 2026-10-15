@@ -5,14 +5,17 @@ is in `ChangeLog.md`.
 
 ## 0.3.1
 
-- **MB-Studio starts again on Windows.** The main window of 0.3.0 was a
-  frameless window with its own title bar. On Windows systems where it could
-  not be created (`CreateWindowEx` failed), Qt kept retrying: MB-Studio never
-  showed a window, used a CPU core and leaked handles, which made the whole
-  system slow. The system title bar is the default again (MB-Studio's menus
-  stay in its own bar below it). The MB-Studio title bar is opt-in
-  (`MBSTUDIO_CUSTOM_TITLEBAR=1` or `ui/customTitleBar=true` in the settings)
-  and on Windows no longer uses a frameless window.
+- **MB-Studio starts again on Windows.** With the title bar drawn by
+  MB-Studio (the 0.3.0 default) the main window could not be created: the
+  Windows message filter of the title bar asked Qt for the window handle
+  while the window was still being created, which started a second, failing
+  creation (`CreateWindowEx`: "The parameter is incorrect"). Qt kept
+  retrying: MB-Studio never showed a window, used a CPU core and leaked
+  window handles until Windows ran out of them, which made the whole system
+  slow. The filter now uses the handle only once the window exists. The
+  system title bar is the default again (MB-Studio's menus stay in their own
+  bar below it); the MB-Studio title bar is opt-in
+  (`MBSTUDIO_CUSTOM_TITLEBAR=1` or `ui/customTitleBar=true` in the settings).
 - **CI** starts the installed application on the runner's real desktop (not
   only offscreen) with both title bars and fails when the window does not
   appear, does not answer or keeps the CPU busy.

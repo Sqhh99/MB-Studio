@@ -25,10 +25,14 @@ class WindowChrome::NativeFilter : public QAbstractNativeEventFilter {
   explicit NativeFilter(WindowChrome *chrome) : chrome_(chrome) {}
 
   bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override {
-    if (eventType != "windows_generic_MSG" || !chrome_->window_)
+    // Never call QWindow::winId() here: messages arrive while the native
+    // window is being created, and winId() would start a nested creation
+    // that fails (CreateWindowEx: "The parameter is incorrect"), after which
+    // Qt retries without end. The handle is stored once it exists.
+    if (eventType != "windows_generic_MSG" || chrome_->hwnd_ == nullptr)
       return false;
     MSG *msg = static_cast<MSG *>(message);
-    const HWND hwnd = reinterpret_cast<HWND>(chrome_->window_->winId());
+    const HWND hwnd = static_cast<HWND>(chrome_->hwnd_);
     if (msg->hwnd != hwnd)
       return false;
     switch (msg->message) {
@@ -125,10 +129,9 @@ void WindowChrome::setTitleBar(QQuickItem *item) {
 
 void WindowChrome::install() {
   // The system title bar is the default. The title bar drawn by MB-Studio is
-  // opt-in (MBSTUDIO_CUSTOM_TITLEBAR=1 or the "ui/customTitleBar" setting):
-  // on some Windows systems the frameless main window of 0.3.0 could not be
-  // created at all (CreateWindowEx failed, Qt kept retrying), so MB-Studio
-  // did not start and used a CPU core.
+  // opt-in (MBSTUDIO_CUSTOM_TITLEBAR=1 or the "ui/customTitleBar" setting).
+  // In 0.3.0 it was the default and the main window could not be created on
+  // Windows (see NativeFilter), so MB-Studio did not start.
   const QSettings settings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("MB-Studio"),
                            QStringLiteral("mbstudio"));
   const bool system = qEnvironmentVariableIntValue("MBSTUDIO_NATIVE_TITLEBAR") == 1;
@@ -138,21 +141,20 @@ void WindowChrome::install() {
   if (active_) {
 #ifdef Q_OS_WIN
     if (QGuiApplication::platformName() == QLatin1String("windows")) {
-      // An ordinary window (no FramelessWindowHint, which made CreateWindowEx
-      // fail): it keeps its frame styles for Snap, the minimise and maximise
-      // animations and the system menu, and WM_NCCALCSIZE makes the whole
-      // window client area, which removes the system title bar.
-      filter_ = std::make_unique<NativeFilter>(this);
-      QCoreApplication::instance()->installNativeEventFilter(filter_.get());
+      // An ordinary window: it keeps its frame styles for Snap, the minimise
+      // and maximise animations and the system menu, and WM_NCCALCSIZE makes
+      // the whole window client area, which removes the system title bar.
+      // The native window is created first, then its messages are filtered.
       const HWND hwnd = reinterpret_cast<HWND>(window_->winId());
       if (hwnd != nullptr) {
+        hwnd_ = hwnd;
+        filter_ = std::make_unique<NativeFilter>(this);
+        QCoreApplication::instance()->installNativeEventFilter(filter_.get());
         SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                      SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
         nativeFrame_ = true;
       } else {
         // no native window: keep the system title bar
-        QCoreApplication::instance()->removeNativeEventFilter(filter_.get());
-        filter_.reset();
         active_ = false;
       }
     } else

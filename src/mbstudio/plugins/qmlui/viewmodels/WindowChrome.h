@@ -87,6 +87,7 @@ class WindowChrome : public QObject {
 
  private:
   class NativeFilter;
+  void *hwnd_ = nullptr;  // the native window (Windows), once it exists
   void install();
   Hit hitAt(const QPointF &pos) const;
   QPointer<QQuickWindow> window_;
