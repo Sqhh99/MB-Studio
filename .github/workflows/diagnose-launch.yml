@@ -1,0 +1,61 @@
+# Temporary diagnostics: launch the released MB-Studio on a real Windows
+# desktop (not offscreen) and record what the process does.
+name: Diagnose launch
+
+on:
+  push:
+    branches: ["claude/**"]
+  workflow_dispatch:
+
+jobs:
+  launch:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Download and install a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.3.0 --repo ${{ github.repository }} --pattern "*setup.exe" --dir "$env:RUNNER_TEMP\dl"
+          $setup = Get-ChildItem "$env:RUNNER_TEMP\dl\*setup.exe" | Select-Object -First 1
+          $target = "$env:RUNNER_TEMP\MB-Studio"
+          $p = Start-Process $setup.FullName -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`""
+          Write-Host "setup exit $($p.ExitCode)"
+          "MBS=$target" >> $env:GITHUB_ENV
+
+      - name: Launch and observe
+        run: |
+          $bin = "$env:MBS\bin"
+          function Observe($label, [hashtable]$envs) {
+            Write-Host "================ $label"
+            foreach ($k in $envs.Keys) { Set-Item "env:$k" $envs[$k] }
+            $log = "$env:RUNNER_TEMP\$label-stderr.log"
+            $t0 = Get-Date
+            $p = Start-Process "$bin\mbstudio.exe" -PassThru -RedirectStandardError $log
+            for ($i = 0; $i -lt 15; $i++) {
+              Start-Sleep -Seconds 2
+              $p.Refresh()
+              if ($p.HasExited) { Write-Host "exited with $($p.ExitCode) after $([int]((Get-Date)-$t0).TotalSeconds) s"; break }
+              $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($p.Id)")
+              $all = @(Get-Process -Name mbstudio -ErrorAction SilentlyContinue).Count
+              $cpu = [math]::Round($p.TotalProcessorTime.TotalSeconds, 1)
+              $mem = [math]::Round($p.WorkingSet64 / 1MB)
+              Write-Host ("t={0,3}s cpu={1,6}s mem={2,6}MB threads={3,3} handles={4,5} responding={5} hwnd={6} title='{7}' children={8} mbstudio-procs={9} {10}" -f `
+                ([int]((Get-Date)-$t0).TotalSeconds), $cpu, $mem, $p.Threads.Count, $p.HandleCount, $p.Responding, $p.MainWindowHandle, $p.MainWindowTitle, $children.Count, $all, (($children | ForEach-Object { $_.Name }) -join ','))
+            }
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+            Get-Process -Name mbstudio -ErrorAction SilentlyContinue | Stop-Process -Force
+            Write-Host "---- stderr (last 40 lines)"
+            Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Write-Host
+            foreach ($k in $envs.Keys) { Remove-Item "env:$k" -ErrorAction SilentlyContinue }
+          }
+          $common = @{ QT_FORCE_STDERR_LOGGING = "1" }
+          Observe "custom-titlebar" $common
+          Observe "system-titlebar" (@{ MBSTUDIO_NATIVE_TITLEBAR = "1" } + $common)
+          Observe "software-quick" (@{ QT_QUICK_BACKEND = "software" } + $common)
+          Observe "offscreen" (@{ QT_QPA_PLATFORM = "offscreen" } + $common)
+          Write-Host "================ settings"
+          Get-ChildItem "$env:APPDATA\MB-Studio" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName; Get-Content $_.FullName -ErrorAction SilentlyContinue | Write-Host }
