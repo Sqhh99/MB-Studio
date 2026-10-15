@@ -229,9 +229,47 @@ jobs:
           # GMT finds the MB-System supplement (mbswath, mbcontour, ...) in bin\gmt_plugins
           $usage = & "$bin\gmt.exe" mbswath 2>&1 | Out-String
           if ($usage -notmatch 'mbswath \[mbsystem\]') { throw "MB-System GMT supplement not found: $usage" }
-          # The GUI starts and shows its window (offscreen), then quits.
-          $env:QT_QPA_PLATFORM = "offscreen"
+          # The user interface starts on the runner's real desktop (not
+          # offscreen, so the Windows platform plugin and the window frame
+          # are used): its window appears, it answers, it is idle afterwards
+          # and Qt reports no failure to create the window. Both title bars.
+          function Test-Gui($label, [hashtable]$envs) {
+            foreach ($k in $envs.Keys) { Set-Item "env:$k" $envs[$k] }
+            $guiLog = "$env:RUNNER_TEMP\gui-$label.log"
+            $gui = Start-Process "$bin\mbstudio.exe" -PassThru -RedirectStandardError $guiLog
+            $shown = $false
+            for ($i = 0; $i -lt 30 -and -not $shown; $i++) {
+              Start-Sleep -Seconds 1
+              $gui.Refresh()
+              if ($gui.HasExited) { break }
+              $shown = $gui.MainWindowHandle -ne 0
+            }
+            $exited = $gui.HasExited
+            $idleCpu = 0
+            if ($shown) {
+              Start-Sleep -Seconds 3
+              $gui.Refresh()
+              $before = $gui.TotalProcessorTime.TotalSeconds
+              Start-Sleep -Seconds 10
+              $gui.Refresh()
+              $idleCpu = $gui.TotalProcessorTime.TotalSeconds - $before
+            }
+            $responding = -not $gui.HasExited -and $gui.Responding
+            if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force }
+            foreach ($k in $envs.Keys) { Remove-Item "env:$k" -ErrorAction SilentlyContinue }
+            $stderr = Get-Content $guiLog -Raw -ErrorAction SilentlyContinue
+            Write-Host "GUI ($label): window=$shown responding=$responding idle CPU=$([math]::Round($idleCpu, 2)) s in 10 s"
+            if ($exited) { Write-Host $stderr; throw "the user interface ($label) exited early with code $($gui.ExitCode)" }
+            if ($stderr -match 'Failed to create platform window') { Write-Host $stderr; throw "the main window ($label) could not be created" }
+            if (-not $shown) { Write-Host $stderr; throw "the main window ($label) did not appear within 30 s" }
+            if (-not $responding) { throw "the user interface ($label) does not respond" }
+            if ($idleCpu -gt 3) { throw "the user interface ($label) is busy while idle ($idleCpu s CPU in 10 s)" }
+          }
           $env:QT_FORCE_STDERR_LOGGING = "1"
+          Test-Gui "system-title-bar" @{}
+          Test-Gui "custom-title-bar" @{ MBSTUDIO_CUSTOM_TITLEBAR = "1" }
+          # and offscreen (no window system)
+          $env:QT_QPA_PLATFORM = "offscreen"
           $guiLog = "$env:RUNNER_TEMP\gui-stderr.log"
           $gui = Start-Process "$bin\mbstudio.exe" -PassThru -RedirectStandardError $guiLog
           Start-Sleep -Seconds 10

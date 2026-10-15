@@ -162,9 +162,10 @@ can be made at the same time.
 
 ## 8. The workbench
 
-The window has an MB-Studio title bar with the menus. On Windows it behaves
-like a system title bar (drag, double click, Snap, Alt+Space); set
-`MBSTUDIO_NATIVE_TITLEBAR=1` to use the system title bar instead.
+The window has the system title bar and, below it, an MB-Studio bar with the
+menus. Set `MBSTUDIO_CUSTOM_TITLEBAR=1` (or `ui/customTitleBar=true` in
+`%APPDATA%\MB-Studio\mbstudio.ini`) to have MB-Studio draw the title bar
+itself, with the menus and the window buttons in one bar.
 **Window** has workspace presets for the main tasks (Overview, Bathymetry
 editing, Modelling, Cartography, Delivery), and saves or resets your own
 layout of the panels.
