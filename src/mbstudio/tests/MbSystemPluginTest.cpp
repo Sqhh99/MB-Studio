@@ -750,6 +750,7 @@ TEST(ProcessingService, GmtFigureRecipes) {
   p.grid = "../../products/grids/bathy.grd";
   p.outputRoot = "../../products/figures/bathy";
   p.formats = {"ps"};
+  p.ghostscript = "gs";  // as found by the caller: the recipe does not depend on this machine
   p.contourInterval = 50;
   p.annotationInterval = 250;
   p.title = "Survey";
@@ -760,7 +761,9 @@ TEST(ProcessingService, GmtFigureRecipes) {
   ASSERT_TRUE(plan.ok) << plan.error;
   ASSERT_GE(plan.steps.size(), 5u);
   EXPECT_EQ("gmt", plan.steps.front().tool);
-  EXPECT_EQ((std::vector<std::string>{"begin", "../../products/figures/bathy", "ps"}), plan.steps.front().arguments);
+  // psconvert, with the Ghostscript given, finishes every format (also PostScript)
+  EXPECT_EQ((std::vector<std::string>{"begin", "../../products/figures/bathy", "ps", "A+m0.4c,Ggs"}),
+            plan.steps.front().arguments);
   EXPECT_EQ(std::vector<std::string>{"end"}, plan.steps.back().arguments);
   std::string all;
   for (const auto &step : plan.steps) {
@@ -807,6 +810,7 @@ TEST(ProcessingService, GmtFigureRecipes) {
   overview.kind = "overview";
   overview.outputRoot = "overview";
   overview.formats = {"ps"};
+  overview.ghostscript = "gs";
   overview.tracks = {"line1.mb71.fnv", "line2.mb71.fnv"};
   EXPECT_FALSE(processing.figure(overview).ok);  // extent not known yet
   overview.region = GeoBounds{-124.51, -124.49, 40.83, 40.85};
@@ -850,7 +854,11 @@ TEST(ProcessingService, GmtFiguresWithTheSameSessionNameRemainIsolated) {
   const std::vector<std::string> directories = {
       platform::joinPath(root, "first"), platform::joinPath(root, "second")};
   ProcessingService processing;
+  const std::string ghostscript = ProcessingService::findGhostscript({platform::parentPath(gmt.path)});
+  if (ghostscript.empty())
+    GTEST_SKIP() << "Ghostscript, which GMT needs to finish figures, is not installed";
   FigureParameters p;
+  p.ghostscript = ghostscript;
   p.grid = writeTestGrid();
   p.outputRoot = "figure";
   p.formats = {"ps"};

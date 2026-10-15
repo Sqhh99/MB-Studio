@@ -154,10 +154,10 @@ as PNG, PDF or PostScript. The figure opens in a **Figure** tab and is a
 product of the project with its recipe: it can be made again with the current
 data or with changed settings.
 
-PNG and PDF figures need Ghostscript; MB-Studio looks for it on the `PATH`
+Figures need Ghostscript: GMT finishes every figure, PostScript included,
+with `psconvert`, which runs Ghostscript. MB-Studio looks for it on the `PATH`
 and in the default installation folders and says so before the job starts if
-it is missing (install it from <https://ghostscript.com>). PostScript needs no
-Ghostscript. Each figure job runs in its own GMT session, so several figures
+it is missing (install it from <https://ghostscript.com>). Each figure job runs in its own GMT session, so several figures
 can be made at the same time.
 
 ## 8. The workbench

@@ -603,7 +603,7 @@ FigureDependencies ProcessingService::figureDependencies() const {
   if (!d.gmt)
     d.message = "GMT (gmt) is not installed with MB-Studio";
   else if (!d.ghostscript)
-    d.message = "Ghostscript was not found: GMT needs it to write PNG and PDF figures (PostScript works without it). "
+    d.message = "Ghostscript was not found: GMT needs it to write figures (PNG, PDF and also PostScript). "
                 "Install Ghostscript from https://ghostscript.com and restart MB-Studio.";
   return d;
 }
@@ -641,13 +641,15 @@ CommandPlan ProcessingService::figure(const FigureParameters &p) const {
   const char *titles[] = {"Bathymetric map", "Survey overview", "Grid quality map", "Perspective view"};
   const int t = kind == "bathymetry" ? 0 : kind == "overview" ? 1 : kind == "quality" ? 2 : 3;
   plan.title = std::string(titles[t]) + " (GMT)";
-  if (raster) {
+  // "gmt end" finishes every figure with psconvert, which runs Ghostscript
+  // for every format (PostScript too: it crops the page to the figure)
+  if (p.ghostscript.empty()) {
     const FigureDependencies d = figureDependencies();
     if (tools_ && !d.gmt)
       return failed(d.message);
-    if (!d.ghostscript && p.ghostscript.empty())
-      return failed("PNG and PDF figures need Ghostscript, which was not found. Choose PostScript, or install "
-                    "Ghostscript (https://ghostscript.com) and restart MB-Studio.");
+    if (!d.ghostscript)
+      return failed("GMT figures need Ghostscript, which was not found. Install Ghostscript "
+                    "(https://ghostscript.com) and restart MB-Studio.");
   }
   if (!isAscii(p.title) || !isAscii(p.zLabel))
     plan.warnings.push_back("GMT's standard fonts cannot show non-Latin characters; use a title in Latin letters.");
@@ -666,16 +668,15 @@ CommandPlan ProcessingService::figure(const FigureParameters &p) const {
     plan.steps.push_back(s);
   };
 
-  // psconvert options (raster and PDF output only; PostScript needs no
-  // conversion): crop with a margin, the raster resolution and the
+  // psconvert options: crop with a margin, the raster resolution and the
   // Ghostscript found here (GMT's own search does not know every location)
   std::vector<std::string> begin = {"begin", p.outputRoot, formats};
-  if (raster) {
-    std::string options = "A+m0.4c,E" + std::to_string(p.dpi);
-    if (!p.ghostscript.empty() && p.ghostscript.find(',') == std::string::npos)
-      options += ",G" + p.ghostscript;
-    begin.push_back(options);
-  }
+  std::string options = "A+m0.4c";
+  if (raster)
+    options += ",E" + std::to_string(p.dpi);
+  if (!p.ghostscript.empty() && p.ghostscript.find(',') == std::string::npos)
+    options += ",G" + p.ghostscript;
+  begin.push_back(options);
   gmt("Start the figure", begin);
 
   const std::string width = num(p.widthCm) + "c";

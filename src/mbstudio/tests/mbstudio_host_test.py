@@ -129,9 +129,14 @@ class HostTest(unittest.TestCase):
       self.assertEqual(3, result['sequence'])
       self.assertEqual(3, result['jobs'])
       self.assertTrue(os.path.exists(os.path.join(project, 'products', 'grids', 'bathy-2.grd')))
-      # a GMT figure (PostScript needs no Ghostscript)
+      # a GMT figure (GMT needs Ghostscript for every format)
       code, out, _ = run('--command', 'figure.check')
-      if code == 0 and json.loads(out)['gmt']:
+      check = json.loads(out) if code == 0 else {}
+      if check.get('gmt') and not check.get('ghostscript'):
+        code, out, _ = run('--command', 'project.figure', 'project=' + project, 'name=map', 'formats=ps')
+        self.assertEqual(1, code, out)
+        self.assertIn('Ghostscript', json.loads(out)['message'])
+      elif check.get('gmt'):
         code, out, err = run('--command', 'project.figure', 'project=' + project, 'name=map', 'formats=ps',
                              'contours=10', 'title=Survey')
         self.assertEqual(0, code, out + err + (job_logs(project) if code != 0 else ''))

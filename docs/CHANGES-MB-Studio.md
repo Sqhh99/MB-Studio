@@ -49,7 +49,7 @@ viewing, sounding editing and GMT cartography.
   survey overviews, grid quality maps and perspective views with GMT (colour
   scale, scale bar, title; PNG, PDF or PostScript). Each figure job runs in
   its own GMT session and temporary folder, so figure jobs can run at the
-  same time. Missing Ghostscript (needed for PNG and PDF) is reported before
+  same time. Missing Ghostscript (GMT needs it for every figure format) is reported before
   the job starts. Figures are products with their recipe: they open in a
   figure tab, can be made again, and their settings can be changed.
 - **Workbench.**

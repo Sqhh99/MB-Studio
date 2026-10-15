@@ -483,7 +483,7 @@ QVariantList ProcessingViewModel::schema(const QString &kind) const {
              .option(QStringLiteral("png,pdf"), tr("PNG and PDF"))
              .option(QStringLiteral("png"), tr("PNG"))
              .option(QStringLiteral("pdf"), tr("PDF"))
-             .option(QStringLiteral("ps"), tr("PostScript (no Ghostscript needed)"));
+             .option(QStringLiteral("ps"), tr("PostScript"));
     f << Field(QStringLiteral("widthCm"), QStringLiteral("number"), tr("Map width"))
              .unit(QStringLiteral("cm"))
              .range(2, 200, 0.5);
